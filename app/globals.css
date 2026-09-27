@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/* MertOS Tasarım Sistemi — token'lar (bkz. CLAUDE.md § Tasarım Sistemi) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: dark;
+
+  /* Yüzeyler */
+  --color-bg: #0a0a0b;
+  --color-card: #141416;
+  --color-card-raised: #1c1c1f;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Metin */
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-tertiary: #52525b;
+
+  /* Modül aksanları */
+  --color-accent-hareket: #b4ff39;
+  --color-accent-kondisyon: #ff375f;
+  --color-accent-su: #32d2ff;
+  --color-accent-beslenme: #ff9f0a;
+  --color-accent-sigara: #ff6b57;
+  --color-accent-sigara-temiz: #34d399;
+  --color-accent-uyku: #5e5ce6;
+  --color-accent-zihin: #bf5af2;
+  --color-accent-finans: #ffd60a;
+  --color-accent-uretkenlik-vurgu: #0a84ff;
+
+  --color-success: #34d399;
+  --color-warning: #ffd60a;
+  --color-danger: #ff375f;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-glow-lime: 0 0 24px -6px rgba(180, 255, 57, 0.45);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f2f2f5;
+  --color-card: #ffffff;
+  --color-card-raised: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-strong: rgba(0, 0, 0, 0.12);
+
+  --color-text-primary: #16161a;
+  --color-text-secondary: #6b6b74;
+  --color-text-tertiary: #9a9aa2;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 20px -10px rgba(0, 0, 0, 0.15);
+}
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, var(--font-inter), "Segoe UI", sans-serif;
+
+  --color-bg: var(--color-bg);
+  --color-card: var(--color-card);
+  --color-card-raised: var(--color-card-raised);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+
+  --color-hareket: var(--color-accent-hareket);
+  --color-kondisyon: var(--color-accent-kondisyon);
+  --color-su: var(--color-accent-su);
+  --color-beslenme: var(--color-accent-beslenme);
+  --color-sigara: var(--color-accent-sigara);
+  --color-sigara-temiz: var(--color-accent-sigara-temiz);
+  --color-uyku: var(--color-accent-uyku);
+  --color-zihin: var(--color-accent-zihin);
+  --color-finans: var(--color-accent-finans);
+  --color-uretkenlik: var(--color-accent-uretkenlik-vurgu);
+
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+
+  --radius-card: 22px;
+  --radius-btn: 14px;
+
+  --animate-fade-in: fade-in 0.35s ease-out;
+  --animate-ring-glow: ring-glow 1.6s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.8s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes ring-glow {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 0 transparent);
+    }
+    50% {
+      filter: drop-shadow(0 0 10px currentColor);
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}
+
+html {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1;
+  overscroll-behavior-y: none;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+.tabular-nums-tight {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* iOS safe-area yardımcıları */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
