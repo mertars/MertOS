@@ -15,6 +15,10 @@ export function useCigaretteSettings() {
   return useLiveQuery(() => db.cigaretteSettings.get(SINGLETON_IDS.CIGARETTE_SETTINGS_ID), []);
 }
 
+export function useNotificationSettings() {
+  return useLiveQuery(() => db.notificationSettings.get(SINGLETON_IDS.NOTIFICATION_SETTINGS_ID), []);
+}
+
 export function useActiveProgram() {
   return useLiveQuery(async () => {
     const all = await db.programs.toArray();

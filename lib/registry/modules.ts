@@ -63,7 +63,7 @@ export interface ModuleDescriptor {
   phase: 1 | 2;
 }
 
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;
 
 export const HUBS: HubDescriptor[] = [
   { id: "beden", name: "Beden", accentVar: "--color-hareket", icon: Activity },
@@ -115,7 +115,7 @@ export const MODULES: ModuleDescriptor[] = [
     phase: 1,
   },
 
-  // --- 2. Aşama (henüz UI'da görünmez — CLAUDE.md § Sonraki Adımlar) ---
+  // --- 2. Aşama ---
   { id: "aktivite", hubId: "beden", name: "Aktivite", shortName: "Aktivite", description: "Adım ve aktif kalori.", accentVar: "--color-hareket", icon: Gauge, route: "/hublar/beden/aktivite", enabledByDefault: true, phase: 2 },
   { id: "kalp", hubId: "beden", name: "Kalp", shortName: "Kalp", description: "Dinlenik nabız, HRV, VO2max.", accentVar: "--color-kondisyon", icon: HeartPulse, route: "/hublar/beden/kalp", enabledByDefault: true, phase: 2 },
   { id: "uyku", hubId: "beden", name: "Uyku", shortName: "Uyku", description: "Uyku süresi ve kalitesi.", accentVar: "--color-uyku", icon: Moon, route: "/hublar/beden/uyku", enabledByDefault: true, phase: 2 },

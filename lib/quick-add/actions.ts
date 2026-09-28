@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Droplets, Cigarette, Activity, type LucideIcon } from "lucide-react";
+import { Droplets, Cigarette, Activity, UtensilsCrossed, Sparkles, ListChecks, Receipt, Moon, type LucideIcon } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db/schema";
 import { addWaterEntry, softDeleteWaterEntry } from "@/lib/db/repo/water";
@@ -55,6 +55,61 @@ export function useQuickAddActions(onDone: () => void): QuickAddAction[] {
         await bumpUsage("antrenman");
         onDone();
         router.push("/hublar/beden/antrenman?ekle=1");
+      },
+    },
+    {
+      key: "ogun",
+      label: "Öğün Ekle",
+      icon: UtensilsCrossed,
+      accentVar: "--color-beslenme",
+      run: async () => {
+        await bumpUsage("ogun");
+        onDone();
+        router.push("/hublar/beslenme/ogunler?ekle=1");
+      },
+    },
+    {
+      key: "ruh-hali",
+      label: "Ruh Hali",
+      icon: Sparkles,
+      accentVar: "--color-zihin",
+      run: async () => {
+        await bumpUsage("ruh-hali");
+        onDone();
+        router.push("/hublar/zihin/ruh-hali?ekle=1");
+      },
+    },
+    {
+      key: "gorev",
+      label: "Görev Ekle",
+      icon: ListChecks,
+      accentVar: "--color-uretkenlik",
+      run: async () => {
+        await bumpUsage("gorev");
+        onDone();
+        router.push("/hublar/uretkenlik/gorevler?ekle=1");
+      },
+    },
+    {
+      key: "islem",
+      label: "İşlem Ekle",
+      icon: Receipt,
+      accentVar: "--color-finans",
+      run: async () => {
+        await bumpUsage("islem");
+        onDone();
+        router.push("/hublar/finans/gelir-gider?ekle=1");
+      },
+    },
+    {
+      key: "uyku",
+      label: "Uyku Ekle",
+      icon: Moon,
+      accentVar: "--color-uyku",
+      run: async () => {
+        await bumpUsage("uyku");
+        onDone();
+        router.push("/hublar/beden/uyku?ekle=1");
       },
     },
   ];

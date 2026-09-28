@@ -6,10 +6,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityRings, type RingSpec } from "@/components/ui/activity-rings";
 import { useMertosScore } from "@/lib/hooks/use-mertos-score";
 
-const RING_META: { key: "hareket" | "yakit" | "temiz"; colorVar: string; label: string }[] = [
+const RING_META: { key: "hareket" | "yakit" | "temiz" | "zihin"; colorVar: string; label: string }[] = [
   { key: "hareket", colorVar: "--color-hareket", label: "Hareket" },
   { key: "yakit", colorVar: "--color-su", label: "Yakıt" },
   { key: "temiz", colorVar: "--color-sigara-temiz", label: "Temiz" },
+  { key: "zihin", colorVar: "--color-zihin", label: "Zihin" },
 ];
 
 export function ScoreCard() {
@@ -27,7 +28,7 @@ export function ScoreCard() {
 
   return (
     <Card className="flex flex-col items-center py-7">
-      <ActivityRings rings={rings} size={200} strokeWidth={16} gap={7}>
+      <ActivityRings rings={rings} size={200} strokeWidth={13} gap={6}>
         <div className="flex flex-col items-center">
           <span className="text-5xl font-bold tabular-nums-tight text-[var(--color-text-primary)]">{data.total}</span>
           <span className="text-[11px] font-medium text-[var(--color-text-secondary)] -mt-1">MertOS Skoru</span>
@@ -39,13 +40,13 @@ export function ScoreCard() {
         <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{data.streak} günlük seri</span>
       </div>
 
-      <div className="flex items-center gap-5 mt-5">
+      <div className="grid grid-cols-4 gap-3 mt-5 w-full">
         {RING_META.map((m) => (
           <div key={m.key} className="flex flex-col items-center gap-1">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: `var(${m.colorVar})` }} />
-            <span className="text-[11px] text-[var(--color-text-secondary)]">{m.label}</span>
+            <span className="text-[10.5px] text-[var(--color-text-secondary)]">{m.label}</span>
             <span className="text-[13px] font-semibold tabular-nums-tight text-[var(--color-text-primary)]">
-              {data.rings[m.key]}%
+              {data.rings[m.key] != null ? `${data.rings[m.key]}%` : "–"}
             </span>
           </div>
         ))}

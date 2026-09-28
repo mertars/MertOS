@@ -4,12 +4,12 @@ import { clamp } from "@/lib/utils";
 /**
  * MertOS Skoru — çekirdek motor (saf fonksiyonlar, Dexie'den bağımsız).
  *
- * 1. Aşama: halkalar Hareket, Yakıt (şimdilik sadece su) ve Temiz (sigara) ile
- * çalışır. Zihin halkası 2. aşamada (uyku + ruh hali + odak verisi gelince)
- * eklenecek — bu yüzden ağırlıklar Zihin dahil tanımlı ama toplam skor,
- * henüz veri üretmeyen halkalar HARİÇ TUTULARAK yeniden normalize edilir.
- * Böylece 2. aşamada Zihin halkası eklendiğinde sadece `available` listesine
- * "zihin" eklemek yeterli olacak, formül değişmeyecek.
+ * Tam sürüm (2. aşama): Hareket / Yakıt (su + beslenme) / Temiz / Zihin
+ * (uyku + ruh hali + odak) halkalarının hepsi dolu. Bir gün için bazı
+ * halkaların girdisi yoksa (örn. o gün hiç uyku kaydı yok) o halka `null`
+ * kalır ve toplam skor, mevcut halkaların ağırlıkları yeniden normalize
+ * edilerek hesaplanır — böylece eksik veri günleri haksız yere düşük skor
+ * almaz.
  */
 
 export type RingKey = "hareket" | "yakit" | "temiz" | "zihin";
@@ -70,15 +70,64 @@ export function computeTemizRing(cigCountToday: number, limit: number, quitMode:
 
 // --- Hareket (Antrenman) -------------------------------------------------
 
-export function computeHareketRing(opts: { trainedToday: boolean; completedThisWeek: number; plannedThisWeek: number }): number {
+const STEP_GOAL = 8000;
+
+export function computeStepsRing(steps: number | null | undefined): number {
+  if (!steps) return 0;
+  return clamp(Math.round((steps / STEP_GOAL) * 100), 0, 100);
+}
+
+/**
+ * Antrenman tabanlı (haftalık planla karşılaştırma) VE adım tabanlı (varsa) ilerlemenin
+ * daha iyisini alır — Aktivite modülü (2. aşama) adım verisi sağladığında ring'i
+ * antrenman yapmadığın günlerde de anlamlı kılar (Apple Fitness "move ring" mantığı).
+ */
+export function computeHareketRing(opts: { trainedToday: boolean; completedThisWeek: number; plannedThisWeek: number; steps?: number | null }): number {
   if (opts.trainedToday) return 100;
-  if (opts.plannedThisWeek <= 0) return 60; // program yoksa nötr bir taban
-  return clamp(Math.round((opts.completedThisWeek / opts.plannedThisWeek) * 90), 0, 90);
+  const stepsRing = computeStepsRing(opts.steps);
+  const planRing = opts.plannedThisWeek <= 0 ? 60 : clamp(Math.round((opts.completedThisWeek / opts.plannedThisWeek) * 90), 0, 90);
+  return Math.max(planRing, stepsRing);
+}
+
+// --- Zihin (Uyku + Ruh Hali + Odak) ---------------------------------------
+
+const SLEEP_TARGET_MIN = 480;
+const FOCUS_TARGET_MIN = 60;
+
+export function computeSleepRing(durationMin: number | null | undefined): number | null {
+  if (durationMin == null) return null;
+  return clamp(Math.round((durationMin / SLEEP_TARGET_MIN) * 100), 0, 100);
+}
+
+/** mood/energy/stress her biri 1-5; stres tersine çevrilir (düşük stres iyi). */
+export function computeMoodRing(avgMood: number | null, avgEnergy: number | null, avgStress: number | null): number | null {
+  if (avgMood == null && avgEnergy == null && avgStress == null) return null;
+  const parts = [avgMood, avgEnergy, avgStress != null ? 6 - avgStress : null].filter((v): v is number => v != null);
+  if (parts.length === 0) return null;
+  const avg = parts.reduce((s, v) => s + v, 0) / parts.length;
+  return clamp(Math.round(((avg - 1) / 4) * 100), 0, 100);
+}
+
+export function computeFocusRing(totalFocusMin: number): number {
+  return clamp(Math.round((totalFocusMin / FOCUS_TARGET_MIN) * 100), 0, 100);
+}
+
+const ZIHIN_WEIGHTS = { uyku: 0.4, ruhHali: 0.35, odak: 0.25 } as const;
+
+export function computeZihinRing(inputs: { sleepRing: number | null; moodRing: number | null; focusRing: number | null }): number | null {
+  const parts: { score: number; weight: number }[] = [];
+  if (inputs.sleepRing != null) parts.push({ score: inputs.sleepRing, weight: ZIHIN_WEIGHTS.uyku });
+  if (inputs.moodRing != null) parts.push({ score: inputs.moodRing, weight: ZIHIN_WEIGHTS.ruhHali });
+  if (inputs.focusRing != null) parts.push({ score: inputs.focusRing, weight: ZIHIN_WEIGHTS.odak });
+  if (parts.length === 0) return null;
+  const weightSum = parts.reduce((s, p) => s + p.weight, 0);
+  return clamp(Math.round(parts.reduce((s, p) => s + p.score * p.weight, 0) / weightSum), 0, 100);
 }
 
 // --- Toplam ---------------------------------------------------------------
 
-export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = { hareket: 0.4, yakit: 0.2, temiz: 0.25, zihin: 0.15 };
+/** Bkz. görev tanımı § 7 — Hareket %30, Yakıt %25, Temiz %25, Zihin %20. */
+export const DEFAULT_SCORE_WEIGHTS: ScoreWeights = { hareket: 0.3, yakit: 0.25, temiz: 0.25, zihin: 0.2 };
 
 export function computeDailyScore(rings: RingValues, weights: ScoreWeights): DailyScoreResult {
   const available = (Object.keys(rings) as RingKey[]).filter((k) => rings[k] != null);

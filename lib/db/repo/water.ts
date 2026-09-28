@@ -44,3 +44,8 @@ export async function getWaterTotalForDay(date: Date = new Date()): Promise<numb
   const rows = await getWaterEntriesForDay(date);
   return rows.reduce((sum, r) => sum + r.amountMl, 0);
 }
+
+export async function getWaterEntriesInRange(start: Date, end: Date): Promise<WaterEntry[]> {
+  const rows = await db.waterEntries.where("at").between(start.toISOString(), end.toISOString(), true, true).toArray();
+  return rows.filter((r) => !r.deletedAt);
+}

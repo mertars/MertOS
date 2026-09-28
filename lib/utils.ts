@@ -21,6 +21,16 @@ export function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Hareketli ortalama — `null` değerleri (veri olmayan günler) pencereden hariç tutar. */
+export function rollingAverage(values: (number | null | undefined)[], window = 7): (number | null)[] {
+  return values.map((_, i) => {
+    const start = Math.max(0, i - window + 1);
+    const slice = values.slice(start, i + 1).filter((v): v is number => v != null);
+    if (slice.length === 0) return null;
+    return Math.round((slice.reduce((s, v) => s + v, 0) / slice.length) * 10) / 10;
+  });
+}
+
 /** Diziyi belirtilen anahtara göre gruplar. */
 export function groupBy<T, K extends string | number>(arr: T[], key: (item: T) => K): Record<K, T[]> {
   return arr.reduce((acc, item) => {

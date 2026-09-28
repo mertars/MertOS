@@ -9,6 +9,7 @@ import { QuickStrip } from "./quick-strip";
 import { CigaretteLiveCard } from "./cigarette-live-card";
 import { HubMiniGrid } from "./hub-mini-grid";
 import { useSettings } from "@/lib/hooks/db-hooks";
+import { useBadgeEvaluation } from "@/lib/hooks/use-badge-evaluation";
 import { db, SINGLETON_IDS } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ const CARD_REGISTRY: Record<string, { label: string; render: () => React.ReactNo
 export function Dashboard() {
   const settings = useSettings();
   const [editing, setEditing] = useState(false);
+  useBadgeEvaluation();
 
   if (!settings) return null;
 

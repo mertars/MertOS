@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { differenceInDays } from "date-fns";
-import { Download, Upload, Sparkles, Trash2, ShieldCheck, Info, AlertCircle } from "lucide-react";
+import { Download, Upload, Sparkles, Trash2, ShieldCheck, BellRing, ChevronRight, HeartPulse, Info, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { loadDemoData } from "@/data/seed/demo";
 import { useToastStore } from "@/lib/store/toast-store";
 import type { ThemeMode } from "@/lib/db/types";
 
-const APP_VERSION = "1.0.0 — 1. Aşama";
+const APP_VERSION = "2.0.0 — 2. Aşama";
 
 export default function AyarlarPage() {
   const profile = useProfile();
@@ -131,6 +132,7 @@ export default function AyarlarPage() {
                 { key: "hareket", label: "Hareket", accent: "--color-hareket" },
                 { key: "yakit", label: "Yakıt", accent: "--color-su" },
                 { key: "temiz", label: "Temiz", accent: "--color-sigara-temiz" },
+                { key: "zihin", label: "Zihin", accent: "--color-zihin" },
               ] as const
             ).map((r) => (
               <div key={r.key} className="flex items-center gap-3">
@@ -153,13 +155,18 @@ export default function AyarlarPage() {
                 </span>
               </div>
             ))}
-            <div className="flex items-center gap-3 opacity-40">
-              <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-[var(--color-zihin)]" />
-              <span className="text-[13px] text-[var(--color-text-primary)] w-16">Zihin</span>
-              <span className="text-[11.5px] text-[var(--color-text-tertiary)]">2. aşamada aktif olacak</span>
-            </div>
           </div>
         </Card>
+
+        <Link href="/ayarlar/bildirimler">
+          <Card className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <BellRing className="h-4 w-4 text-[var(--color-text-secondary)]" />
+              <span className="text-[13.5px] font-medium text-[var(--color-text-primary)]">Bildirimler</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-[var(--color-text-tertiary)]" />
+          </Card>
+        </Link>
 
         <Card>
           <div className="flex items-center justify-between">
@@ -195,6 +202,11 @@ export default function AyarlarPage() {
             </Button>
             <Button variant="secondary" className="w-full justify-start" onClick={() => fileInputRef.current?.click()}>
               <Upload className="h-4 w-4" /> İçe aktar
+            </Button>
+            <Button asChild variant="secondary" className="w-full justify-start">
+              <Link href="/import">
+                <HeartPulse className="h-4 w-4" /> Apple Sağlık&apos;tan içe aktar
+              </Link>
             </Button>
             <input
               ref={fileInputRef}

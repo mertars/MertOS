@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ensureDefaults } from "@/lib/db";
+import { syncNotificationSummary } from "@/lib/notifications/summary-sync";
 import { ThemeProvider } from "./theme-provider";
 import { PinGate } from "./pin-gate";
 import { Toaster } from "@/components/ui/toaster";
+
+const SUMMARY_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -12,6 +15,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     ensureDefaults().finally(() => setReady(true));
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    syncNotificationSummary();
+    const interval = setInterval(syncNotificationSummary, SUMMARY_SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [ready]);
 
   return (
     <>
