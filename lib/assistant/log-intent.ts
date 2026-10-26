@@ -3,6 +3,7 @@ import { parseDayReferences } from "./day-ref";
 import { MEAL_TYPE_LABELS } from "./meals";
 import { usesFormalYou } from "./persona";
 import { AFFIRMATIVE, clauses, NEGATIVE, NOT_DONE } from "./routine-detect";
+import { findCourse, parseBlocks, type Course } from "./study";
 import { normalizeTr } from "./text";
 import { addDays } from "./time";
 import type { MealType, RoutineItem } from "./types";
@@ -25,7 +26,9 @@ export interface MealEntry {
 /** Sorulan sorunun cevabı beklenirken asistan mesajında saklanan yarım iş. */
 export type PendingLog =
   | { kind: "ogun"; date: string; mealType: MealType; mealId: string | null; mealName: string | null; isLeftover: boolean; rating: number | null; note: string | null }
-  | { kind: "rutin"; date: string; items: RoutineItem[] };
+  | { kind: "rutin"; date: string; items: RoutineItem[] }
+  /** Çalışma bloğu (Bölüm 18): ders ya da blok sayısı eksik, tek soru soruldu */
+  | { kind: "calisma"; date: string; courseId: string | null; blocks: number | null };
 
 export interface KnownMeal {
   id: string | null;
@@ -234,6 +237,7 @@ export function resolvePending(pending: PendingLog, message: string, known: Know
     if (affirm && !negative) return { kind: "rutin", date: pending.date, items: pending.items };
     return negative ? { kind: "vazgec" } : { kind: "ilgisiz" };
   }
+  if (pending.kind === "calisma") return { kind: "ilgisiz" }; // resolveStudyPending'e gider
   // Soru, yeni bir cümle (fiil: "koşacağım", "geliyorum", "yaptım") ya da başka güne dair söz → cevap değil.
   const words = t.split(" ");
   const verbish = words.some((w) => /(?:iyor|uyor|acak|ecek|acag|eceg|(?:d|t)[iu](?:m|k|n)|m[iu]st[iu])\w*$/.test(w) && !/^(?:yedim|yedik|yaptim)$/.test(w));
@@ -284,4 +288,62 @@ export function isBareDone(message: string): boolean {
 
 export function formatMealLine(e: MealEntry): string {
   return `${lowerFirst(MEAL_TYPE_LABELS[e.mealType])} — ${lowerFirst(e.mealName)}${e.isLeftover ? " (kalan)" : ""}${e.rating ? ` (${e.rating}/5)` : ""}`;
+}
+
+
+// ---------------------------------------------------------------------------
+// Sesle çalışma bloğu kaydı (Bölüm 18): "ayrık matematik 2 blok çalıştım".
+// Ders ve blok sayısı belliyse yazılır; biri eksikse tek soru. Bugün, yalnızca
+// açıkça "dün" denirse dün.
+
+export interface StudyEntry {
+  date: string;
+  courseId: string;
+  blocks: number;
+}
+
+export type StudyDetect =
+  | { kind: "kayit"; entry: StudyEntry }
+  | { kind: "sor"; question: string; pending: Extract<PendingLog, { kind: "calisma" }> }
+  | { kind: "baska-gun" }
+  | { kind: "yok" };
+
+const STUDY_VERB = /\b(?:calist[iu](?:m|k)|calisma(?:m|dim)? ?(?:yap\w*|bitir\w*))\b/;
+
+export function detectStudyLog(message: string, ctx: { today: string; hitap: string; courses: Course[]; blockMin: number }): StudyDetect {
+  const t = normalizeTr(message);
+  const clause = clauses(message).find((c) => !c.question && STUDY_VERB.test(c.text) && !NEGATIVE.test(c.text) && !NOT_DONE.test(c.text));
+  if (!clause) return { kind: "yok" };
+  const course = findCourse(message, ctx.courses);
+  const blocks = parseBlocks(message, ctx.blockMin);
+  // "İşte çalıştım" gibi ders dışı cümleler: ne ders, ne blok, ne de "ders/sınav" kelimesi varsa kayıt değil.
+  if (!course && !blocks && !/\b(?:ders|sinav|blok|vize)\b/.test(t)) return { kind: "yok" };
+  const refs = parseDayReferences(message, ctx.today).filter((d) => d !== ctx.today);
+  const yesterday = addDays(ctx.today, -1);
+  if (refs.length && !(refs.length === 1 && refs[0] === yesterday && /\bdun\b/.test(t))) return { kind: "baska-gun" };
+  const date = refs.length ? yesterday : ctx.today;
+  const courseId = course && course !== "belirsiz" ? course.id : null;
+  if (blocks && (blocks < 1 || blocks > 20)) return { kind: "yok" };
+  if (courseId && blocks) return { kind: "kayit", entry: { date, courseId, blocks } };
+  const pending = { kind: "calisma" as const, date, courseId, blocks: blocks ?? null };
+  if (!courseId) return { kind: "sor", question: `${ctx.hitap}, hangi dersi çalıştınız?`.replace("çalıştınız", usesFormalYou(ctx.hitap) ? "çalıştınız" : "çalıştın"), pending };
+  return { kind: "sor", question: `${ctx.hitap}, ${ctx.courses.find((c) => c.id === courseId)!.name} için kaç blok yazayım?`, pending };
+}
+
+/** Sorulan soruya cevap: ders adı ya da blok sayısı ("ayrık", "2", "iki blok"); biri hâlâ eksikse null. */
+export function resolveStudyPending(pending: Extract<PendingLog, { kind: "calisma" }>, message: string, ctx: { courses: Course[]; blockMin: number }): StudyEntry | "vazgec" | "ilgisiz" {
+  const t = normalizeTr(message);
+  if (NEGATIVE.test(t) && t.split(" ").length <= 3) return "vazgec";
+  if (message.includes("?") || t.split(" ").length > 6) return "ilgisiz";
+  const course = pending.courseId ?? (() => {
+    const c = findCourse(message, ctx.courses);
+    return c && c !== "belirsiz" ? c.id : null;
+  })();
+  let blocks = pending.blocks ?? parseBlocks(message, ctx.blockMin);
+  if (!blocks) {
+    const n = t.match(/^(\d{1,2}|bir|iki|uc|dort|bes|alti|yedi|sekiz)$/);
+    if (n) blocks = Number(n[1]) || ({ bir: 1, iki: 2, uc: 3, dort: 4, bes: 5, alti: 6, yedi: 7, sekiz: 8 } as Record<string, number>)[n[1]];
+  }
+  if (!course || !blocks || blocks < 1 || blocks > 20) return "ilgisiz";
+  return { date: pending.date, courseId: course, blocks };
 }

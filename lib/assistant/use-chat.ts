@@ -57,7 +57,7 @@ export function toChatItems(messages: ClientChatMessage[], now = new Date()): Ch
     else {
       const { title, detail } = splitLine(m.content);
       const meta = m.meta;
-      if (meta?.routine || meta?.mealLogId) out.push({ kind: "islem", key, id: m.id, type: "isaret", title, detail });
+      if (meta?.routine || meta?.mealLogId || meta?.studyBlockId) out.push({ kind: "islem", key, id: m.id, type: "isaret", title, detail });
       else if (meta?.todoId) out.push({ kind: "islem", key, id: m.id, type: "liste", title, detail });
       else if (meta?.memoryId) out.push({ kind: "islem", key, id: m.id, type: "not", title, detail });
       else {

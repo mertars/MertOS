@@ -28,6 +28,8 @@ export interface ChatMessage {
     todoId?: number;
     /** Sohbetten yazılan öğün kaydı (Faz 4) — "Geri al" siler */
     mealLogId?: number;
+    /** Sohbetten yazılan çalışma bloğu (Bölüm 18) — "Geri al" siler */
+    studyBlockId?: number;
     /** Asistan tek kısa soru sordu ("Menemen öğle yemeği olarak mı yazayım?"); cevap gelince kod yazar */
     pending?: PendingLog;
     routineUndone?: boolean;

@@ -9,6 +9,9 @@ import { MEAL_TYPE_LABELS } from "@/lib/assistant/meals";
 import { checkOutput } from "@/lib/assistant/output-check";
 import {
   detectMealLog,
+  detectStudyLog,
+  resolveStudyPending,
+  type StudyEntry,
   formatMealLine,
   isBareDone,
   isUndoCommand,
@@ -34,6 +37,7 @@ import {
 import { contentWords, formatTrDate, normalizeTr } from "@/lib/assistant/text";
 import { addDays, isoWeekday, istanbulNow, weekdayName } from "@/lib/assistant/time";
 import type { MealLogRow, RoutineItem, RoutineLogRow, TodoItem } from "@/lib/assistant/types";
+import { addBlocks, deleteBlock, listCourses } from "./study-repo";
 import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog, listSchedule, setRoutineDone } from "./assistant-repo";
 import {
   addMessage,
@@ -256,6 +260,20 @@ async function addMarkLine(
   });
 }
 
+async function studyCtx(db: Client) {
+  const [courses, settings] = await Promise.all([listCourses(db), getSettings(db)]);
+  return { courses, blockMin: settings.blokDk };
+}
+
+/** Çalışma bloğunu yazar ve geri alınabilir "İşaretledim: Ayrık Matematik — 2 blok" satırını ekler. */
+async function writeStudy(db: Client, conversationId: string, e: StudyEntry, today: string): Promise<ChatMarks> {
+  const course = (await listCourses(db)).find((c) => c.id === e.courseId)!;
+  const block = await addBlocks(db, e, "sohbet");
+  const dayNote = e.date === today ? "" : ` (${formatTrDate(e.date)})`;
+  const message = await addMessage(db, { conversationId, role: "not", content: `İşaretledim${dayNote}: ${course.name} — ${e.blocks} blok`, mode: "yazi", meta: { studyBlockId: block.id } });
+  return { message, context: `Sistem az önce çalışma bloğu kaydetti${dayNote}: ${course.name}, ${e.blocks} blok. Kısaca onayla ("İşaretledim").`, ask: null };
+}
+
 /**
  * Mert'in "koştum, duş aldım", "öğlen menemen yedim, 4 puan" gibi cümlelerini KOD
  * yakalar ve modelden ÖNCE yazar — böylece model "işaretledim" diyebilir, "Bugün
@@ -272,6 +290,10 @@ export async function logFromChat(
 ): Promise<ChatMarks> {
   const lastAssistant = history.filter((m) => m.role === "assistant" && !m.meta?.system).at(-1) ?? null;
   const previousAssistant = lastAssistant?.content ?? null;
+  // Çalışma bloğu (Bölüm 18): "ayrık matematik 2 blok çalıştım" — kod yazar, model onaylar.
+  const studyDet = detectStudyLog(message, { today: now.date, hitap, ...(await studyCtx(db)) });
+  if (studyDet.kind === "kayit") return writeStudy(db, conversationId, studyDet.entry, now.date);
+  if (studyDet.kind === "sor") return { message: null, context: "", ask: { question: studyDet.question, pending: studyDet.pending } };
   const [schedule, todayTodos] = await Promise.all([listSchedule(db), listTodos(db, now.date, now.date)]);
   const found = detectRoutineDone({ message, previousAssistant, today: now.date, time: now.time, itemsForDate: (d) => routineItemsForDay(schedule, dayTypeFor(d)) });
   const todos = matchDoneTodos(todayTodos, message);
@@ -343,12 +365,13 @@ async function addTodoFromChat(db: Client, conversationId: string, proposal: Tod
 /** Sohbetteki sistem satırının işlemini geri alır: işaretleme, öğün kaydı ya da listeye ekleme. */
 export async function undoChatAction(db: Client, messageId: number): Promise<ChatMessage | null> {
   const m = await getMessage(db, messageId);
-  if (!m || m.role !== "not" || !(m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId)) return null;
+  if (!m || m.role !== "not" || !(m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId || m.meta?.studyBlockId)) return null;
   let content: string;
   if (m.meta.todoId) {
     await deleteTodo(db, m.meta.todoId);
     content = m.content.replace(/^Listeye ekledim/, "Listeden çıkarıldı");
   } else {
+    if (m.meta.studyBlockId) await deleteBlock(db, m.meta.studyBlockId);
     const { date, items } = m.meta.routine ?? { date: "", items: [] };
     for (const item of items) await setRoutineDone(db, date, item, false, "sohbet");
     for (const id of m.meta.todosDone ?? []) await setTodoDone(db, id, false);
@@ -361,7 +384,7 @@ export async function undoChatAction(db: Client, messageId: number): Promise<Cha
 
 /** "Geri al" komutu: bu sohbetteki son (henüz geri alınmamış) kayıt satırı. */
 async function undoLast(db: Client, history: ChatMessage[]): Promise<ChatMessage | null> {
-  const last = history.filter((m) => m.role === "not" && (m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId)).at(-1);
+  const last = history.filter((m) => m.role === "not" && (m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId || m.meta?.studyBlockId)).at(-1);
   return last ? undoChatAction(db, last.id) : null;
 }
 
@@ -444,7 +467,14 @@ export async function handleChat(
   // 2) Az önce sorulan tek soruya cevap ("Menemen öğle yemeği olarak mı yazayım?" → "evet" / "hayır, akşam").
   const lastTurn = history.filter((m) => m.role !== "not").at(-1);
   const pending = lastTurn?.role === "assistant" ? lastTurn.meta?.pending : undefined;
-  if (pending) {
+  if (pending?.kind === "calisma") {
+    const r = resolveStudyPending(pending, input.message, await studyCtx(db));
+    if (r === "vazgec") return direct("Tamam, yazmadım.", null);
+    if (r !== "ilgisiz") {
+      const w = await writeStudy(db, conversationId, r, now.date);
+      return direct(`Tamam ${settings.hitap}, yazdım.`, w.message);
+    }
+  } else if (pending) {
     const r = resolvePending(pending, input.message, pending.kind === "ogun" ? await knownMeals(db, now.date) : []);
     if (r.kind === "vazgec") return direct(pending.kind === "ogun" ? "Tamam, yazmadım." : "Tamam, işaretlemedim.", null);
     if (r.kind !== "ilgisiz") {

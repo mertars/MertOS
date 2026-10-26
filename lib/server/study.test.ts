@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@/lib/assistant/config";
+import { addDays, istanbulNow } from "@/lib/assistant/time";
 import { dueSlot } from "@/lib/assistant/proactive";
 import { getDailyBrief } from "./assistant-repo";
 import { handleChat } from "./chat";
@@ -113,5 +114,43 @@ describe("asistan — ders/sınav anları (koddan, model yok)", () => {
     expect(chat.calls[0].system).toContain("3 Kasım 11:30 Bilgisayar Ağları");
     expect(chat.calls[0].system).not.toContain("Derslik 11");
     expect(chat.calls[0].system).not.toContain("Lab.");
+  });
+});
+
+describe("sesle çalışma bloğu kaydı", () => {
+  // Sohbet yazma zamanı gerçek saati kullandığı için (6 saatlik oturum kuralı) bu blokta "bugün" gerçek bugündür.
+  const today = istanbulNow().date;
+  const yesterday = addDays(today, -1);
+  const ask = async (message: string, conversationId?: string) => handleChat({ db, llm: recordingLlm().fn, fts: false }, { conversationId, message, mode: "ses" });
+  const total = async (courseId: string, date = today) => (await getStudyOverview(db, { date: today, time: "21:00" }, DEFAULT_SETTINGS)).recent.filter((b) => b.courseId === courseId && b.date === date).reduce((s, b) => s + b.blocks, 0);
+
+  it("'ayrık matematik 2 blok çalıştım' yazar, geri al siler", async () => {
+    const before = await total("BSM2037");
+    const r = await ask("ayrık matematik iki blok çalıştım");
+    expect(r.marks?.content).toBe("İşaretledim: Ayrık Matematik — 2 blok");
+    expect(await total("BSM2037")).toBe(before + 2);
+    const u = await ask("geri al", r.conversationId);
+    expect(u.undone?.content).toContain("geri alındı");
+    expect(await total("BSM2037")).toBe(before);
+  });
+
+  it("dün denirse düne; başka gün ya da ders dışı cümle yazılmaz", async () => {
+    await ask("dün devre teorisi 3 blok çalıştım");
+    expect(await total("BSM2033", yesterday)).toBe(3);
+    const other = await ask("geçen salı devre teorisi 3 blok çalıştım");
+    expect(other.marks).toBeNull();
+    expect(await total("BSM2033", today)).toBe(0);
+    expect((await ask("bugün işte çalıştım")).marks).toBeNull();
+  });
+
+  it("eksikse tek soru: ders yok → sorar → 'algoritmalar' → yazar", async () => {
+    const q = await ask("3 blok çalıştım");
+    expect(q.reply.content).toBe("Mert Bey, hangi dersi çalıştınız?");
+    const a = await ask("algoritmalar", q.conversationId);
+    expect(a.marks?.content).toBe("İşaretledim: Veri Yapıları ve Algoritmalar — 3 blok");
+    const q2 = await ask("istatistik çalıştım", a.conversationId);
+    expect(q2.reply.content).toBe("Mert Bey, İstatistik ve Olasılık Hesapları için kaç blok yazayım?");
+    const a2 = await ask("iki", q2.conversationId);
+    expect(a2.marks?.content).toBe("İşaretledim: İstatistik ve Olasılık Hesapları — 2 blok");
   });
 });

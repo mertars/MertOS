@@ -123,7 +123,7 @@ export interface ClientChatMessage {
   role: "user" | "assistant" | "not";
   content: string;
   createdAt: string;
-  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; todosDone?: number[]; todoId?: number; mealLogId?: number; routineUndone?: boolean; system?: boolean; proactive?: string } | null;
+  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; todosDone?: number[]; todoId?: number; mealLogId?: number; studyBlockId?: number; routineUndone?: boolean; system?: boolean; proactive?: string } | null;
 }
 
 const CONVERSATION_KEY = "mertos-sohbet-id";

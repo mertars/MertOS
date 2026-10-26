@@ -562,8 +562,12 @@ Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
   (`studyMorningLine`); `ders` (dersten 30 dk önce, sınav haftasında ayara
   bağlı), `sinav` (sınav günü 07:30 → ilk sınava kadar; saat + derslik),
   `sinav-aksam` (önceki akşam 21:30) — bu üçü `CODE_ONLY_SLOTS`, model çağrılmaz.
-- Sesle blok kaydı ("Ayrık matematik 2 blok çalıştım") HENÜZ YOK — görev
-  dosyası "önce ekrandan, ses sonra" diyor.
+- **Sesle/yazıyla blok kaydı**: `log-intent.ts` `detectStudyLog` ("ayrık
+  matematik iki blok çalıştım", "dün devre 3 blok çalıştım"; saat/dk blok
+  ayarıyla çevrilir). Ders ve blok belliyse KOD yazar (`chat.ts` `writeStudy`,
+  satır "İşaretledim: Ayrık Matematik — 2 blok", `meta.studyBlockId`, "geri
+  al" siler); biri eksikse tek soru (`meta.pending.kind="calisma"`,
+  `resolveStudyPending`). Yalnızca bugün/dün; ders dışı "işte çalıştım" yazılmaz.
 - Testler: `lib/assistant/study.test.ts`, `lib/server/study.test.ts`.
 
 ### 15.6 Hafızam (Faz 3)

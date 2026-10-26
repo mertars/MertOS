@@ -357,7 +357,7 @@ function parseDate(text: string, today: string): string | null {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-function findCourse(text: string, courses: Course[]): { id: string } | "belirsiz" | null {
+export function findCourse(text: string, courses: Course[]): { id: string } | "belirsiz" | null {
   const t = ` ${normalizeTr(text)} `;
   const code = text.toUpperCase().match(/\bBSM\s?(\d{4})\b/);
   if (code) {
@@ -379,9 +379,12 @@ function findCourse(text: string, courses: Course[]): { id: string } | "belirsiz
   return best ? { id: best.id } : null;
 }
 
-function parseBlocks(text: string, blockMin: number): number | null {
+export function parseBlocks(text: string, blockMin: number): number | null {
   // Ondalık virgül normalizeTr'den ÖNCE noktaya çevrilir ("1,5 saat" → 1.5).
   const t = normalizeTr(text.replace(/(\d),(\d)/g, "$1x$2")).replace(/(\d)x(\d)/g, "$1.$2");
+  const WORDS: Record<string, number> = { bir: 1, iki: 2, uc: 3, dort: 4, bes: 5, alti: 6, yedi: 7, sekiz: 8 };
+  const word = t.match(/\b(bir|iki|uc|dort|bes|alti|yedi|sekiz) blok\b/);
+  if (word) return WORDS[word[1]];
   const blok = t.match(/\b(\d+(?:\.\d+)?) ?(?:blok|b)\b/);
   if (blok) return Math.round(Number(blok[1]));
   const saat = t.match(/\b(\d+(?:\.\d+)?) ?(?:saat|sa|h)\b/);
