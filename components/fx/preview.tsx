@@ -6,8 +6,9 @@ import type { EffectLevel } from "@/lib/assistant/config";
 import { cn } from "@/lib/utils";
 import { EffectLevelProvider } from "./effect-level";
 import { CardLabel, GlassCard } from "./glass-card";
+import { ChatList, ChatScroll, Composer, SuggestionChips, type ChatItem } from "./chat-view";
 import { MicOrb, type MicSource } from "./mic-orb";
-import { Wallpaper } from "./wallpaper";
+import { Wallpaper, type WallpaperVariant } from "./wallpaper";
 
 // Faz 3 tasarım ÖNİZLEMESİ (onay için — docs/gorev-dosyasi/faz-3-tasarim.md
 // "Uygulamadan önce ana ekranın ve mikrofonun ekran görüntüsünü göster").
@@ -28,15 +29,21 @@ const PROGRAM = [
   { time: "20:30", title: "Temizlik", done: false },
 ];
 
-const CHAT = [
-  { role: "user", text: "Bugün koşmadım." },
-  { role: "assistant", text: "Tamam Mert Bey, olur böyle günler. Akşam 20 dakikalık hafif bir yürüyüş ister misiniz?" },
-  { role: "user", text: "Olur, akşam 8'de yaparım." },
-  { role: "assistant", text: "Süper Mert Bey, bugün 20:00'ye listeye ekledim." },
-  { role: "not", text: "Listeye ekledim: 20 dk hafif yürüyüş — bugün 20:00" },
-] as const;
+const CHAT: ChatItem[] = [
+  { kind: "gun", text: "BUGÜN · 26 EKİM" },
+  { kind: "mert", text: "Sabah rutinini yaptım.", time: "06:40" },
+  { kind: "islem", type: "isaret", title: "İşaretledim", detail: "Uyanış, Buzlu suya yüz, Su içme, Soğuk duş" },
+  { kind: "asistan", text: "Güzel başlangıç Mert Bey, dördünü de işaretledim. Sırada 6,5 km Zone 2 koşu var.", time: "06:40" },
+  { kind: "mert", text: "Bugün koşamadım, akşam bir şey yapsam mı?", time: "19:58" },
+  { kind: "asistan", text: "Olur böyle günler. Akşam 20 dakikalık hafif bir yürüyüş ister misiniz? Saatini söylerseniz listeye eklerim.", time: "19:58" },
+  { kind: "mert", text: "Olur, 8'de.", time: "20:01" },
+  { kind: "asistan", text: "Süper Mert Bey, bugün 20:00'ye ekledim.", time: "20:01" },
+  { kind: "islem", type: "liste", title: "Listeye ekledim", detail: "20 dk hafif yürüyüş · bugün 20:00" },
+];
 
-export function DesignPreview({ screen, efekt, speaking }: { screen: PreviewScreen; efekt?: EffectLevel; speaking: boolean }) {
+const SUGGESTIONS = ["Bugün ne yesem?", "Programım ne?", "Yarın ne var?", "Koştum"];
+
+export function DesignPreview({ screen, efekt, speaking, arka }: { screen: PreviewScreen; efekt?: EffectLevel; speaking: boolean; arka: WallpaperVariant }) {
   const [active, setActive] = useState(speaking);
   const [source, setSource] = useState<MicSource>(speaking ? "demo" : null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -68,7 +75,7 @@ export function DesignPreview({ screen, efekt, speaking }: { screen: PreviewScre
 
   return (
     <EffectLevelProvider level={efekt} className="fx relative min-h-dvh lg:h-dvh lg:overflow-hidden">
-      <Wallpaper />
+      <Wallpaper variant={arka} />
       {/* Telefon */}
       <div className="relative lg:hidden">
         {screen === "bugun" ? <PhoneToday /> : <PhoneAssistant active={active} source={source} onMic={toggleMic} />}
@@ -204,55 +211,35 @@ function PhoneToday() {
 
 function PhoneAssistant({ active, source, onMic }: { active: boolean; source: MicSource; onMic: () => void }) {
   return (
-    <main className="relative z-10 flex min-h-dvh flex-col px-4 pb-[112px] pt-[max(env(safe-area-inset-top),18px)]">
-      <header className="fx-enter flex items-center justify-between">
+    <main className="relative z-10 flex h-dvh flex-col px-4 pb-[96px] pt-[max(env(safe-area-inset-top),18px)]">
+      <header className="fx-enter flex shrink-0 items-center justify-between">
         <div>
-          <p className="fx-num text-[11px] text-[var(--fx-text-3)]">ASİSTAN · 20:04</p>
+          <p className="fx-num text-[10.5px] tracking-[0.12em] text-[var(--fx-text-3)]">ASİSTAN · ÇEVRİMİÇİ</p>
           <h1 className="text-[26px] font-semibold tracking-tight">Konuşalım</h1>
         </div>
         <span className="fx-chip" style={{ ["--accent" as string]: "var(--fx-hafiza)" }}>
           <Brain className="h-3 w-3" /> 12 not
         </span>
       </header>
-      <div className="mt-4 flex-1 space-y-2.5">
-        <ChatBubbles />
-      </div>
-      {/* alt yarı: mikrofon + canlı yazıya döküm */}
-      <div className="mt-6 flex flex-col items-center">
-        <p className={cn("mb-7 h-10 max-w-[280px] text-center text-[15px] leading-snug transition-opacity duration-500", active ? "opacity-100" : "opacity-0")}>
-          <span className="text-[var(--fx-text)]">Yarın sabah koşudan önce</span> <span className="text-[var(--fx-text-3)]">ne yesem…</span>
-        </p>
-        <MicOrb size={148} active={active} source={source} onClick={onMic} label={active ? "Konuşmayı bitir" : "Konuş"} />
-        <p className="fx-num mt-8 text-[10.5px] tracking-[0.2em] text-[var(--fx-text-3)]">{active ? "DİNLİYORUM" : "DOKUN VE KONUŞ"}</p>
+      {/* üstten yumuşakça kaybolan sohbet akışı */}
+      <ChatScroll className="relative mt-3 flex-1" watch={CHAT.length}>
+        <ChatList items={CHAT} typing={!active} />
+      </ChatScroll>
+      {/* alt yarı: mikrofon + öneriler + yazma çubuğu (tek elle) */}
+      <div className="shrink-0 pt-2">
+        <div className="flex flex-col items-center">
+          <p className={cn("mb-4 h-5 text-center text-[14px] transition-opacity duration-500", active ? "opacity-100" : "opacity-0")}>
+            <span>Yarın sabah koşudan önce</span> <span className="text-[var(--fx-text-3)]">ne yesem…</span>
+          </p>
+          <MicOrb size={96} active={active} source={source} onClick={onMic} label={active ? "Konuşmayı bitir" : "Konuş"} />
+          <p className="fx-num mt-5 text-[9.5px] tracking-[0.22em] text-[var(--fx-text-3)]">{active ? "DİNLİYORUM" : "DOKUN VE KONUŞ"}</p>
+        </div>
+        <div className="mt-4 space-y-2.5">
+          <SuggestionChips items={SUGGESTIONS} />
+          <Composer />
+        </div>
       </div>
     </main>
-  );
-}
-
-function ChatBubbles({ compact }: { compact?: boolean }) {
-  return (
-    <>
-      {CHAT.map((m, i) =>
-        m.role === "not" ? (
-          <p key={i} className="fx-enter text-center text-[11.5px] text-[color-mix(in_srgb,var(--fx-proje)_75%,white)]" style={{ ["--i" as string]: i + 1 }}>
-            ＋ {m.text}
-          </p>
-        ) : (
-          <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-            <div
-              className={cn(
-                "fx-enter max-w-[82%] px-4 py-2.5 leading-snug",
-                compact ? "text-[13.5px]" : "text-[14.5px]",
-                m.role === "user" ? "rounded-[20px] rounded-br-[6px] bg-[var(--fx-text)] text-black" : "fx-glass rounded-[20px] rounded-bl-[6px]",
-              )}
-              style={{ ["--i" as string]: i + 1, ["--accent" as string]: "var(--fx-asistan)", ...(m.role === "assistant" ? { ["--fx-radius" as string]: "20px" } : {}) }}
-            >
-              {m.text}
-            </div>
-          </div>
-        ),
-      )}
-    </>
   );
 }
 
@@ -368,15 +355,16 @@ function DesktopShell({ active, source, onMic }: { active: boolean; source: MicS
 
         {/* Orta: büyük mikrofon, altında sohbet */}
         <div className="flex min-h-0 flex-col">
-          <div className="flex shrink-0 flex-col items-center pt-6">
-            <MicOrb size={190} active={active} source={source} onClick={onMic} label={active ? "Konuşmayı bitir" : "Konuş"} />
-            <p className="fx-num mt-12 text-[11px] tracking-[0.22em] text-[var(--fx-text-3)]">{active ? "DİNLİYORUM" : "DOKUN VE KONUŞ"}</p>
+          <div className="flex shrink-0 flex-col items-center pt-4">
+            <MicOrb size={150} active={active} source={source} onClick={onMic} label={active ? "Konuşmayı bitir" : "Konuş"} />
+            <p className="fx-num mt-8 text-[10.5px] tracking-[0.22em] text-[var(--fx-text-3)]">{active ? "DİNLİYORUM" : "DOKUN VE KONUŞ"}</p>
           </div>
-          <div className="mt-6 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
-            <ChatBubbles compact />
-          </div>
-          <div className="fx-glass mt-3 flex h-12 shrink-0 items-center px-4 text-[14px] text-[var(--fx-text-3)]" style={{ ["--accent" as string]: "var(--fx-asistan)", ["--fx-radius" as string]: "16px" }}>
-            Asistana yaz…
+          <ChatScroll className="relative mt-4 flex-1 px-1" watch={CHAT.length}>
+            <ChatList items={CHAT} typing={!active} compact />
+          </ChatScroll>
+          <div className="mt-2 shrink-0 space-y-2.5">
+            <SuggestionChips items={SUGGESTIONS} />
+            <Composer />
           </div>
         </div>
 

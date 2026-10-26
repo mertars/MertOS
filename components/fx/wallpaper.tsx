@@ -4,18 +4,20 @@ import { useEffect, useRef } from "react";
 import type { EffectLevel } from "@/lib/assistant/config";
 import { useEffectLevel } from "./effect-level";
 
-// Hareketli duvar kağıdı (Faz 3): parlak siyah zemin üstünde 3D derinlikli,
-// canlı renkli parçalar (kapsül, küre, halka, karo) yavaşça süzülür.
-// Performans: her parça BİR KEZ ışıklandırılmış bir görüntüye (sprite) çizilir;
-// her karede yalnızca konum/dönüş/3D eğim değişir. Efekt seviyesi parça sayısını,
-// hızı, kare hızını ve çözünürlüğü belirler; sekme gizliyken durur.
+// Hareketli arka plan (Faz 3). Mert renkli 3D parçaları reddetti (26 Ekim 2026);
+// yerine iki sade-gösterişli seçenek:
+//  - "dalga": parlak siyah üstünde ince ışık çizgilerinden 3D dalga yüzeyi;
+//    öndeki çizgi arkadakini örter (gerçek derinlik), üstünde yumuşak bir ışık gezer.
+//  - "toz": cilalı siyah yüzeyde yavaşça kayan ışık yansımaları + derinlikte
+//    süzülen ince toz zerreleri.
+// Efekt seviyesi çizgi/zerre sayısını, hızı, kare hızını ve çözünürlüğü belirler;
+// "kapali"da canvas hiç yok; sekme gizliyken çizim durur.
 
-const PALETTE = ["#1fd16b", "#ffc531", "#3b7bff", "#8c52ff", "#ff5b45"];
-type Shape = "kapsul" | "kure" | "halka" | "karo";
+export type WallpaperVariant = "dalga" | "toz";
 
 interface LevelConfig {
-  /** telefon / geniş ekran parça sayısı */
-  count: [number, number];
+  lines: number;
+  dust: number;
   speed: number;
   fps: number;
   dpr: number;
@@ -23,10 +25,12 @@ interface LevelConfig {
 }
 
 const LEVELS: Record<Exclude<EffectLevel, "kapali">, LevelConfig> = {
-  tam: { count: [13, 20], speed: 1, fps: 60, dpr: 1.5, parallax: 1 },
-  orta: { count: [7, 11], speed: 0.5, fps: 30, dpr: 1.25, parallax: 0.5 },
-  dusuk: { count: [6, 9], speed: 0.08, fps: 8, dpr: 1, parallax: 0 },
+  tam: { lines: 38, dust: 150, speed: 1, fps: 60, dpr: 1.5, parallax: 1 },
+  orta: { lines: 26, dust: 80, speed: 0.55, fps: 30, dpr: 1.25, parallax: 0.5 },
+  dusuk: { lines: 18, dust: 40, speed: 0.1, fps: 10, dpr: 1, parallax: 0 },
 };
+
+const BG = "#030304";
 
 function mulberry32(seed: number) {
   return () => {
@@ -38,215 +42,134 @@ function mulberry32(seed: number) {
   };
 }
 
-function shade(hex: string, amount: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (c: number) => Math.round(amount >= 0 ? c + (255 - c) * amount : c * (1 + amount));
-  const r = mix((n >> 16) & 255);
-  const g = mix((n >> 8) & 255);
-  const b = mix(n & 255);
-  return `rgb(${r},${g},${b})`;
+/** Dalga yüksekliği: üç yavaş sinüsün toplamı (x: 0..1, z: 0..1 derinlik) */
+function wave(x: number, z: number, t: number): number {
+  return (
+    Math.sin(x * 5.2 + t * 0.35 + z * 2.1) * 0.55 +
+    Math.sin(x * 11.3 - t * 0.22 + z * 4.7) * 0.25 +
+    Math.sin(x * 2.1 + z * 7.3 + t * 0.15) * 0.45
+  );
 }
 
-/** Işıklandırılmış parça görüntüsü — ışık sol üstten, alttan renkli yansıma (kenar ışığı). */
-function makeSprite(shape: Shape, color: string, size: number, blur: number): HTMLCanvasElement {
-  const pad = Math.ceil(blur * 2.5) + 4;
-  const w = shape === "kapsul" ? size : size;
-  const h = shape === "kapsul" ? size * 0.4 : size;
-  const c = document.createElement("canvas");
-  c.width = Math.ceil(w + pad * 2);
-  c.height = Math.ceil(h + pad * 2);
-  const ctx = c.getContext("2d")!;
-  if (blur > 0.5 && "filter" in ctx) ctx.filter = `blur(${blur.toFixed(1)}px)`;
-  ctx.translate(pad, pad);
+function drawWaves(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, cfg: LevelConfig, px: number, py: number) {
+  const n = cfg.lines;
+  const horizon = h * 0.34 + py * 10;
+  const steps = Math.max(60, Math.round(w / 9));
+  // gezen ışık: soldan sağa çok yavaş, geri döner
+  const light = 0.5 + 0.42 * Math.sin(t * 0.12);
+  for (let i = 0; i < n; i++) {
+    const d = i / (n - 1); // 0 uzak → 1 yakın
+    const base = horizon + (h - horizon) * Math.pow(d, 1.55);
+    const amp = h * (0.012 + d * 0.06);
+    const spread = 0.08 + d * 0.32; // yakın çizgiler ekranın dışına taşar (perspektif)
+    ctx.beginPath();
+    for (let s = 0; s <= steps; s++) {
+      const u = s / steps;
+      const x = (-spread + u * (1 + spread * 2)) * w + px * d * 30;
+      const y = base - amp * wave(u, d, t);
+      if (s === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    // arkadaki çizgileri örtmek için çizginin altını zeminle doldur
+    ctx.lineTo(w * (1 + spread) + 40, h + 40);
+    ctx.lineTo(-w * spread - 40, h + 40);
+    ctx.closePath();
+    ctx.fillStyle = BG;
+    ctx.fill();
 
-  if (shape === "kure") {
-    const r = size / 2;
-    const g = ctx.createRadialGradient(r * 0.62, r * 0.55, r * 0.05, r, r, r);
-    g.addColorStop(0, shade(color, 0.75));
-    g.addColorStop(0.18, shade(color, 0.25));
-    g.addColorStop(0.55, color);
-    g.addColorStop(0.88, shade(color, -0.55));
-    g.addColorStop(1, shade(color, -0.8));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(r, r, r, 0, Math.PI * 2);
-    ctx.fill();
-    // alttan yansıyan zemin ışığı
-    const rim = ctx.createRadialGradient(r * 1.25, r * 1.6, 0, r * 1.25, r * 1.6, r * 0.9);
-    rim.addColorStop(0, shade(color, 0.35).replace("rgb", "rgba").replace(")", ",0.55)"));
-    rim.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.globalCompositeOperation = "source-atop";
-    ctx.fillStyle = rim;
-    ctx.fillRect(0, 0, size, size);
-    // keskin parlama noktası
-    ctx.globalCompositeOperation = "source-over";
-    const s = ctx.createRadialGradient(r * 0.62, r * 0.5, 0, r * 0.62, r * 0.5, r * 0.28);
-    s.addColorStop(0, "rgba(255,255,255,0.95)");
-    s.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = s;
-    ctx.beginPath();
-    ctx.arc(r * 0.62, r * 0.5, r * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (shape === "kapsul") {
-    const rr = h / 2;
-    const path = () => {
-      ctx.beginPath();
-      ctx.moveTo(rr, 0);
-      ctx.lineTo(w - rr, 0);
-      ctx.arc(w - rr, rr, rr, -Math.PI / 2, Math.PI / 2);
-      ctx.lineTo(rr, h);
-      ctx.arc(rr, rr, rr, Math.PI / 2, -Math.PI / 2);
-      ctx.closePath();
-    };
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, shade(color, 0.55));
-    g.addColorStop(0.22, shade(color, 0.12));
-    g.addColorStop(0.6, color);
-    g.addColorStop(0.92, shade(color, -0.6));
-    g.addColorStop(1, shade(color, -0.3));
-    ctx.fillStyle = g;
-    path();
-    ctx.fill();
-    ctx.save();
-    path();
-    ctx.clip();
-    // uç gölgeleri — silindir hissi
-    const ends = ctx.createLinearGradient(0, 0, w, 0);
-    ends.addColorStop(0, "rgba(0,0,0,0.45)");
-    ends.addColorStop(0.12, "rgba(0,0,0,0)");
-    ends.addColorStop(0.88, "rgba(0,0,0,0)");
-    ends.addColorStop(1, "rgba(0,0,0,0.5)");
-    ctx.fillStyle = ends;
-    ctx.fillRect(0, 0, w, h);
-    // üstte uzun parlama şeridi
-    const streak = ctx.createLinearGradient(0, h * 0.12, 0, h * 0.32);
-    streak.addColorStop(0, "rgba(255,255,255,0)");
-    streak.addColorStop(0.5, "rgba(255,255,255,0.7)");
-    streak.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = streak;
-    ctx.fillRect(rr * 0.9, h * 0.1, w - rr * 1.8, h * 0.24);
-    ctx.restore();
-  } else if (shape === "halka") {
-    const r = size / 2;
-    const t = size * 0.17;
-    const g = ctx.createRadialGradient(r, r, r - t, r, r, r);
-    g.addColorStop(0, shade(color, -0.65));
-    g.addColorStop(0.35, color);
-    g.addColorStop(0.55, shade(color, 0.35));
-    g.addColorStop(0.8, color);
-    g.addColorStop(1, shade(color, -0.6));
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    const a = 0.05 + d * 0.16;
+    g.addColorStop(0, `rgba(255,255,255,${a * 0.35})`);
+    g.addColorStop(Math.max(0, light - 0.22), `rgba(255,255,255,${a * 0.6})`);
+    g.addColorStop(light, `rgba(255,236,214,${Math.min(0.75, a * 2.6)})`);
+    g.addColorStop(Math.min(1, light + 0.22), `rgba(255,255,255,${a * 0.6})`);
+    g.addColorStop(1, `rgba(255,255,255,${a * 0.35})`);
     ctx.strokeStyle = g;
-    ctx.lineWidth = t;
-    ctx.beginPath();
-    ctx.arc(r, r, r - t / 2, 0, Math.PI * 2);
-    ctx.stroke();
-    // sol üstte ışık yayı
-    ctx.strokeStyle = "rgba(255,255,255,0.75)";
-    ctx.lineWidth = t * 0.16;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.arc(r, r, r - t * 0.38, Math.PI * 1.08, Math.PI * 1.42);
-    ctx.stroke();
-  } else {
-    // karo: yuvarlatılmış, eğimli kenarlı kare
-    const rad = size * 0.24;
-    const rect = (x: number, y: number, s: number, rr: number) => {
-      ctx.beginPath();
-      ctx.roundRect(x, y, s, s, rr);
-    };
-    const g = ctx.createLinearGradient(0, 0, size, size);
-    g.addColorStop(0, shade(color, 0.45));
-    g.addColorStop(0.45, color);
-    g.addColorStop(1, shade(color, -0.65));
-    ctx.fillStyle = g;
-    rect(0, 0, size, rad);
-    ctx.fill();
-    const inset = size * 0.1;
-    const top = ctx.createLinearGradient(0, inset, 0, size - inset);
-    top.addColorStop(0, shade(color, 0.3));
-    top.addColorStop(1, shade(color, -0.25));
-    ctx.fillStyle = top;
-    rect(inset, inset, size - inset * 2, rad * 0.7);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.lineWidth = Math.max(1, size * 0.012);
-    rect(inset, inset, size - inset * 2, rad * 0.7);
+    ctx.lineWidth = 0.6 + d * 1.1;
     ctx.stroke();
   }
-  return c;
 }
 
-interface Piece {
-  sprite: HTMLCanvasElement;
+interface Mote {
+  x: number;
+  y: number;
   z: number;
-  /** ekran oranında merkez */
-  cx: number;
-  cy: number;
-  ax: number;
-  ay: number;
-  fx: number;
-  fy: number;
-  px: number;
-  py: number;
-  rot: number;
-  rotSpeed: number;
-  /** 3D eğim (sahte perspektif) */
-  tiltSpeed: number;
-  tiltPhase: number;
-  alpha: number;
+  vy: number;
+  sway: number;
+  phase: number;
+  size: number;
 }
 
-function buildPieces(count: number, base: number, dpr: number, seed = 7): Piece[] {
-  const rand = mulberry32(seed);
-  const shapes: Shape[] = ["kapsul", "kure", "halka", "karo", "kapsul", "kure"];
-  const pieces: Piece[] = [];
-  for (let i = 0; i < count; i++) {
-    const z = 0.35 + rand() * 0.65;
-    const shape = shapes[i % shapes.length];
-    const color = PALETTE[(i * 3 + 1) % PALETTE.length];
-    const size = base * (shape === "kapsul" ? 1.5 : 1) * (0.55 + z * 0.75) * (0.75 + rand() * 0.5);
-    // içerik ortada okunsun diye parçalar daha çok kenarlara yerleşir
-    const side = rand() < 0.5 ? rand() * 0.32 : 0.68 + rand() * 0.32;
-    const horizontalEdge = rand() < 0.45;
-    pieces.push({
-      sprite: makeSprite(shape, color, size * dpr, (1 - z) * 12 * dpr),
-      z,
-      cx: horizontalEdge ? rand() : side,
-      cy: horizontalEdge ? (rand() < 0.5 ? rand() * 0.22 : 0.78 + rand() * 0.22) : rand(),
-      ax: 0.03 + rand() * 0.06,
-      ay: 0.03 + rand() * 0.07,
-      fx: 0.035 + rand() * 0.05,
-      fy: 0.03 + rand() * 0.05,
-      px: rand() * Math.PI * 2,
-      py: rand() * Math.PI * 2,
-      rot: rand() * Math.PI * 2,
-      rotSpeed: (rand() - 0.5) * 0.12,
-      tiltSpeed: shape === "kure" ? 0 : 0.05 + rand() * 0.08,
-      tiltPhase: rand() * Math.PI * 2,
-      alpha: 0.5 + z * 0.5,
-    });
+function makeDust(count: number, seed = 11): Mote[] {
+  const r = mulberry32(seed);
+  return Array.from({ length: count }, () => ({
+    x: r() * 2 - 1,
+    y: r() * 2 - 1,
+    z: 0.15 + r() * 0.85,
+    vy: 0.006 + r() * 0.014,
+    sway: 0.02 + r() * 0.04,
+    phase: r() * Math.PI * 2,
+    size: 0.5 + r() * 1.3,
+  }));
+}
+
+function drawDust(ctx: CanvasRenderingContext2D, w: number, h: number, t: number, dt: number, motes: Mote[], px: number, py: number) {
+  // cilalı yüzeyde kayan geniş, yumuşak ışık yansımaları
+  const sheens = [
+    { x: 0.25 + 0.2 * Math.sin(t * 0.05), y: 0.2 + 0.08 * Math.cos(t * 0.04), rx: 0.9, ry: 0.22, a: 0.075, rot: -0.35 },
+    { x: 0.8 + 0.15 * Math.cos(t * 0.035), y: 0.72 + 0.1 * Math.sin(t * 0.03), rx: 0.75, ry: 0.18, a: 0.05, rot: 0.4 },
+  ];
+  for (const s of sheens) {
+    ctx.save();
+    ctx.translate(s.x * w, s.y * h);
+    ctx.rotate(s.rot);
+    ctx.scale(1, s.ry / s.rx);
+    const r = s.rx * Math.max(w, h) * 0.6;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, `rgba(255,248,240,${s.a})`);
+    g.addColorStop(0.45, `rgba(255,248,240,${s.a * 0.35})`);
+    g.addColorStop(1, "rgba(255,248,240,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.restore();
   }
-  return pieces.sort((a, b) => a.z - b.z);
+  // perspektifli toz: uzaktakiler küçük, sönük ve yavaş
+  const cx = w / 2;
+  const cy = h / 2;
+  const focal = Math.max(w, h) * 0.55;
+  for (const m of motes) {
+    m.y -= m.vy * dt * (0.4 + m.z);
+    if (m.y < -1.1) m.y = 1.1;
+    const sx = cx + ((m.x + Math.sin(t * 0.3 + m.phase) * m.sway) * focal) / (1.6 - m.z) + px * m.z * 22;
+    const sy = cy + (m.y * focal) / (1.6 - m.z) + py * m.z * 22;
+    if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+    const twinkle = 0.65 + 0.35 * Math.sin(t * 1.3 + m.phase * 3);
+    ctx.globalAlpha = (0.12 + m.z * 0.55) * twinkle;
+    ctx.fillStyle = m.z > 0.8 ? "#fff3e6" : "#ffffff";
+    ctx.beginPath();
+    ctx.arc(sx, sy, m.size * (0.4 + m.z * 0.9), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
-export function Wallpaper({ className }: { className?: string }) {
+export function Wallpaper({ variant = "dalga", className }: { variant?: WallpaperVariant; className?: string }) {
   const level = useEffectLevel();
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (level === "kapali") return;
     const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
     const cfg = LEVELS[level];
-    let pieces: Piece[] = [];
     let width = 0;
     let height = 0;
     let dpr = 1;
     let raf = 0;
     let last = 0;
     let time = 0;
+    const motes = makeDust(cfg.dust);
     const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 
     const resize = () => {
@@ -255,34 +178,23 @@ export function Wallpaper({ className }: { className?: string }) {
       height = canvas.clientHeight;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
-      const wide = width >= 900;
-      const base = Math.min(Math.max(Math.min(width, height) * 0.2, 70), 170);
-      pieces = buildPieces(cfg.count[wide ? 1 : 0], base, dpr);
     };
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       if (document.hidden) return;
-      const minDelta = 1000 / cfg.fps;
-      if (last && now - last < minDelta - 1) return;
+      if (last && now - last < 1000 / cfg.fps - 1) return;
       const dt = last ? Math.min(now - last, 100) / 1000 : 0;
       last = now;
       time += dt * cfg.speed;
       pointer.x += (pointer.tx - pointer.x) * 0.04;
       pointer.y += (pointer.ty - pointer.y) * 0.04;
-
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (const p of pieces) {
-        const x = (p.cx + p.ax * Math.sin(time * p.fx * 6 + p.px)) * width + pointer.x * p.z * 26 * cfg.parallax;
-        const y = (p.cy + p.ay * Math.sin(time * p.fy * 6 + p.py)) * height + pointer.y * p.z * 26 * cfg.parallax;
-        const tilt = p.tiltSpeed ? 0.35 + 0.65 * Math.abs(Math.cos(time * p.tiltSpeed * 6 + p.tiltPhase)) : 1;
-        ctx.globalAlpha = p.alpha;
-        ctx.setTransform(1, 0, 0, 1, x * dpr, y * dpr);
-        ctx.rotate(p.rot + time * p.rotSpeed);
-        ctx.scale(1, tilt);
-        ctx.drawImage(p.sprite, -p.sprite.width / 2, -p.sprite.height / 2);
-      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      const px = pointer.x * cfg.parallax;
+      const py = pointer.y * cfg.parallax;
+      if (variant === "dalga") drawWaves(ctx, width, height, time, cfg, px, py);
+      else drawDust(ctx, width, height, time, dt * cfg.speed, motes, px, py);
     };
 
     const onPointer = (e: PointerEvent) => {
@@ -299,15 +211,11 @@ export function Wallpaper({ className }: { className?: string }) {
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointer);
     };
-  }, [level]);
+  }, [level, variant]);
 
   return (
     <div aria-hidden className={`fx-floor pointer-events-none fixed inset-0 ${className ?? ""}`}>
       {level !== "kapali" && <canvas ref={ref} className="absolute inset-0 h-full w-full" />}
-      {/* parçaların üstünde ince bir cam perde: içerik okunur kalsın, derinlik artsın */}
-      <div className="absolute inset-0 bg-[radial-gradient(75%_55%_at_50%_45%,rgba(3,3,4,0.55),rgba(3,3,4,0.15)_70%,transparent)]" />
-      {/* üst kenarda başlık okunurluğu için hafif karartma */}
-      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[rgba(3,3,4,0.7)] to-transparent" />
     </div>
   );
 }

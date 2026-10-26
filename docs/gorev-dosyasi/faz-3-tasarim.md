@@ -25,3 +25,13 @@ Hafızam ekranı: asistanın Mert hakkında kaydettikleri kartlarda görünür: 
 Günün kararı kartı: ana ekranın üstünde tek cümlelik öneri (gün tipi, öğün, toplu pişirme durumu). Kod üretir, LLM gerekmez.
 
 Çalışma kuralı: Uygulamadan önce ana ekranın ve mikrofonun ekran görüntüsünü bana göster, onay alınca devam et. Telefonda akıcılık öncelikli: animasyonlar efekt seviyesine bağlı olsun.
+
+## Mert'in geri bildirimleri (onay turu)
+
+- **26 Ekim 2026, 1. tur:** Renkli 3D parçalardan oluşan duvar kağıdı reddedildi
+  ("tamamen kaldır, çok farklı bir şey bul") — yukarıdaki "Arka plan" maddesinin
+  yerini alır. Yerine iki seçenek önizlemede: `dalga` (ince ışık çizgilerinden
+  3D dalga yüzeyi) ve `toz` (cilalı siyahta kayan ışık + derinlikte ince toz).
+  Mikrofon simgesi ve çevresindeki ışınlar da reddedildi → koyu cilalı cam küre,
+  ince çizgili simge, sesle akışkan dalgalanan üç ince çember. Sohbet görünümü
+  geliştirildi (balonsuz asistan metni, cam balon, işlem kartları, öneri çipleri).
