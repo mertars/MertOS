@@ -3,7 +3,7 @@
 // Bkz. CLAUDE.md § PWA / Offline.
 
 import { defaultCache } from "@serwist/next/worker";
-import { Serwist, type PrecacheEntry, type SerwistGlobalConfig } from "serwist";
+import { NetworkOnly, Serwist, type PrecacheEntry, type SerwistGlobalConfig } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -18,7 +18,13 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    // Asistan/giriş API'leri asla SW önbelleğinden verilmez: kişisel veri
+    // çıkıştan sonra önbellekte kalmasın ve çevrimdışı olunca istemci bunu
+    // fark edip kendi "son özet" önbelleğini (localStorage) göstersin.
+    { matcher: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/"), handler: new NetworkOnly() },
+    ...defaultCache,
+  ],
   fallbacks: {
     entries: [
       {

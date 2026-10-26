@@ -6,6 +6,12 @@ tasarım token'ları ve "sıradaki adımlar" burada.
 
 ## 0. Durum
 
+> **YENİ (Ekim 2026): "MertOS Asistan" projesi başladı** — bkz. § 15. Görev
+> dosyası 5 fazlık; **Faz 1 tamam** (Turso, giriş, günlük motor). Bildirimler
+> bu planla KAPATILDI (§ 10 artık tarihsel). Aşağıdaki § 0–14 eski 1./2.
+> aşamayı anlatır ve hâlâ geçerli (eski modüller IndexedDB'de çalışmaya
+> devam ediyor).
+
 **1. ve 2. Aşama tamamlandı.** Aşağıdaki her şey çalışır durumda, TypeScript
 hataları sıfır, ESLint temiz, `npm run build` ve `npm run test` başarılı.
 `lib/registry/modules.ts`'teki `CURRENT_PHASE = 2` — yani tüm modüller,
@@ -442,5 +448,86 @@ Bu proje iki büyük spesifikasyon belgesiyle (1. Aşama ve 2. Aşama — "MertO
 2. Aşama: Tam Sürüm") ilerledi. Her ikisi de bu oturumların sohbet
 geçmişinde tam metin olarak mevcut; bu döküman onların **sonucunu** (ne
 inşa edildiğini, nerede olduğunu, hangi kısayolların bilinçli alındığını)
-özetliyor. Üçüncü bir aşama planlanmıyor — burada durursa uygulama zaten
-"bitmiş" bir kişisel ürün.
+özetliyor. (Bu cümlenin eski hâli "üçüncü aşama planlanmıyor" diyordu — § 15'teki
+Asistan projesi bunun yerini aldı.)
+
+## 15. MertOS Asistan (yeni proje, Ekim 2026)
+
+Kaynak: Mert'in "MertOS Asistan — Claude Code Görev Dosyası" (sohbet
+geçmişinde tam metin). Ana ilke: **%80 deterministik kod, %20 LLM**;
+sohbet veri değiştirmez (istisnalar: hafıza notu sil/düzelt, günlük
+"yapıldı" kaydı). LLM: Gemini ücretsiz katman (Faz 2). Para harcanmaz.
+
+Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ·
+3) yeni tasarım + Hafızam · 4) ses + proaktif konuşma · 5) GitHub proje
+okuyucu. Her faz sonunda Mert onayı.
+
+### 15.1 Veri: Turso (libSQL)
+
+- `lib/server/db.ts` (server-only) — `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN`
+  ile istemci; canlıda (`VERCEL`) `file:` URL'i reddeder. `getDb()` soğuk
+  başlangıçta bir kez `prepareDatabase` çalıştırır.
+- `lib/server/db-core.ts` — migration'lar (`lib/server/schema.ts`
+  `MIGRATIONS` dizisi; **yayınlanmış adımı değiştirme, yeni adım ekle**),
+  FTS5 (`memories_fts`, oluşturulamazsa `ftsAvailable=false`), varsayılan
+  program/temizlik tablosu (tablo boşsa), tarif senkronu.
+- Tablolar: `settings` (anahtar/JSON değer), `schedule_items`,
+  `routine_log` (PK date+item), `meals`, `meal_log` (soft delete),
+  `chores` (rotation JSON), `memories` (+`memories_fts`),
+  `conversations`, `messages`, `projects`, `project_state`,
+  `login_attempts`, `backups`, `schema_meta`.
+- **Tarifler koddan gelir**: `data/assistant/defaults.ts` `RECIPES`
+  (şu an BOŞ — Mert ile test turu sonrası doldurulacak). İçerik hash'i
+  değişince açılışta `meals`'a upsert edilir, listeden çıkan pasife alınır.
+- `lib/server/assistant-repo.ts` — tüm okuma/yazma (Client parametreli →
+  `db-core.test.ts` gerçek yerel libSQL dosyasıyla test eder).
+- Türkçe FTS notu: `unicode61 remove_diacritics` "ı"yı "i"ye çevirmiyor —
+  Faz 2'de `text_norm` sütununa kodda sadeleştirilmiş metin yazılacak.
+
+### 15.2 Giriş
+
+- `proxy.ts` (Next 16'da middleware'in yeni adı) — giriş yoksa sayfalar
+  `/giris?sonra=…`'ya, API'ler 401'e; `/api/push/*` 410 (bildirim yok).
+  Açık yollar: `/giris`, `/offline`, `/api/auth/login|status`,
+  `/api/backup/weekly` (kendi `CRON_SECRET` kontrolü), statik dosyalar.
+- `lib/auth/session.ts` — HMAC imzalı durumsuz çerez (`mertos_oturum`,
+  180 gün, 90 günün altına inince proxy yeniler). İmza anahtarı
+  `SESSION_SECRET|şifreHash` → şifre değişince tüm oturumlar düşer.
+- Şifre: `APP_PASSWORD_HASH` = bcrypt hash'in base64'ü (`$` karakterleri
+  .env'de bozulmasın diye). `/giris` kurulum ekranı hash'i tarayıcıda
+  üretir (bcryptjs), sunucuya bir şey göndermez.
+- `lib/server/login-guard.ts` — IP başına 15 dk'da 5 hata, tüm IP'ler
+  için saatte 30 hata → 429. Kayıtlar Turso'da (Vercel örnekleri arası).
+- Eski istemci PIN kilidi duruyor (varsayılan kapalı).
+
+### 15.3 Günlük motor (LLM'siz)
+
+- `lib/assistant/time.ts` — her şey `Europe/Istanbul` (`istanbulNow`);
+  modele tarih sorulmaz.
+- `lib/assistant/daily.ts` — gün tipi (Pzt/Çar/Cum/Paz koşu, Sal/Per/Cmt
+  yürüyüş), program, rutin maddeleri, temizlik rotasyonu (ISO hafta
+  numarası), haftalık tutarlılık (§ 16.3), "günün kararı" cümlesi
+  (§ 16.1), `buildDailyBrief`.
+- `lib/assistant/meals.ts` — kalan porsiyon önce (pişirmeden en fazla 2
+  gün), son 5 gün elenir (tarif azsa gevşer ama dün/bugün asla), koşu günü
+  ≤25 dk, yürüyüş günü toplu pişirme, "tekrar yap" öne, deterministik seçim.
+- Not: eski 8 haftalık program (Sal/Per/Cmt) `lib/programs/` altında
+  duruyor ve Antrenman modülünde hâlâ kullanılıyor; asistanın gün tipi ondan
+  bağımsız.
+- API: `GET /api/assistant/brief`, `POST /api/assistant/routine`,
+  `POST|DELETE /api/assistant/meal-log`, `GET|PATCH /api/assistant/settings`,
+  `GET /api/backup/download`, `GET /api/backup/weekly` (Vercel Cron,
+  `vercel.json`).
+- UI: `components/assistant/daily-brief.tsx` ("Bugün" ekranının üstü);
+  son özet `localStorage`'da (§ 16.2). Service worker `/api/*`'yi
+  **önbelleğe almaz** (`app/sw.ts` NetworkOnly kuralı) — yoksa çevrimdışı
+  durum fark edilmiyordu.
+- Ayarlar > Asistan (`components/settings/assistant-settings-card.tsx`):
+  hitap, sunucu yedeği indir, çıkış. Model adları: `lib/assistant/config.ts`.
+
+### 15.4 Yedekler
+
+- Eski (IndexedDB) yedeği artık **tüm** Dexie tablolarını (+ fotoğraf
+  Blob'larını data URL olarak) içeriyor — önceden sadece 12 v1 tablosunu
+  alıyordu (Faz 1'de bulunup düzeltilen hata).
+- Turso: haftalık `backups` tablosu (son 8) + elle indirme.

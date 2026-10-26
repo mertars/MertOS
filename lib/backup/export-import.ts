@@ -9,25 +9,52 @@ interface BackupPayload {
   data: Record<string, unknown[]>;
 }
 
-const TABLE_NAMES = [
-  "profile",
-  "settings",
-  "workouts",
-  "strengthSets",
-  "personalRecords",
-  "programs",
-  "programProgress",
-  "waterEntries",
-  "cigaretteEntries",
-  "cigaretteSettings",
-  "expenses",
-  "quickAddUsage",
-] as const;
+/**
+ * Fotoğraf tabloları (`mealPhotos`, `bodyPhotos`) Blob tutuyor — JSON.stringify
+ * Blob'u `{}` yapar, bu yüzden yedekte data URL'e çevrilip geri yüklenirken
+ * tekrar Blob'a dönüştürülüyor.
+ */
+interface SerializedBlob {
+  __blob: string;
+}
 
+function isSerializedBlob(value: unknown): value is SerializedBlob {
+  return typeof value === "object" && value !== null && typeof (value as SerializedBlob).__blob === "string";
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function serializeRow(row: unknown): Promise<unknown> {
+  if (typeof row !== "object" || row === null) return row;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key] = value instanceof Blob ? { __blob: await blobToDataUrl(value) } : value;
+  }
+  return out;
+}
+
+async function deserializeRow(row: unknown): Promise<unknown> {
+  if (typeof row !== "object" || row === null) return row;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key] = isSerializedBlob(value) ? await (await fetch(value.__blob)).blob() : value;
+  }
+  return out;
+}
+
+/** Tüm Dexie tabloları (v1 + v2) yedeğe girer — tablo listesi elle tutulmuyor. */
 export async function exportAllData(): Promise<BackupPayload> {
   const data: Record<string, unknown[]> = {};
-  for (const name of TABLE_NAMES) {
-    data[name] = await (db as unknown as Record<string, { toArray: () => Promise<unknown[]> }>)[name].toArray();
+  for (const table of db.tables) {
+    const rows = await table.toArray();
+    data[table.name] = await Promise.all(rows.map(serializeRow));
   }
   return { schemaVersion: BACKUP_SCHEMA_VERSION, exportedAt: new Date().toISOString(), app: "mertos", data };
 }
@@ -62,11 +89,20 @@ export async function importBackupFile(file: File): Promise<void> {
     throw new BackupImportError("Bu yedek, uygulamanın daha yeni bir sürümünden alınmış. Önce uygulamayı güncelle.");
   }
 
+  // Blob dönüşümü async (fetch) olduğu için transaction'dan ÖNCE yapılıyor —
+  // Dexie transaction'ı içinde Dexie dışı bir await transaction'ı kapatır.
+  const restored: Record<string, unknown[]> = {};
+  for (const table of db.tables) {
+    const rows = parsed.data[table.name];
+    if (!Array.isArray(rows)) continue;
+    restored[table.name] = await Promise.all(rows.map(deserializeRow));
+  }
+
+  // Yedekte olmayan tablolara dokunulmaz (eski, sadece v1 tablolarını içeren yedekler de çalışır).
   await db.transaction("rw", db.tables, async () => {
-    for (const name of TABLE_NAMES) {
-      const rows = parsed.data[name];
-      if (!Array.isArray(rows)) continue;
-      const table = (db as unknown as Record<string, { clear: () => Promise<void>; bulkAdd: (r: unknown[]) => Promise<unknown> }>)[name];
+    for (const table of db.tables) {
+      const rows = restored[table.name];
+      if (!rows) continue;
       await table.clear();
       if (rows.length > 0) await table.bulkAdd(rows);
     }
