@@ -1,12 +1,25 @@
 import type { Client } from "@libsql/client";
 import type { AssistantSettings } from "@/lib/assistant/config";
 import type { DailyBrief } from "@/lib/assistant/daily";
-import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS, routineItemsForDay } from "@/lib/assistant/daily";
+import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS, routineItemsForDay, scheduleForDay } from "@/lib/assistant/daily";
 import { parseDayReferences } from "@/lib/assistant/day-ref";
 import { buildExtractionPrompt, EXTRACTION_RESPONSE_SCHEMA, extractionSchema, filterExtractedNotes, MEMORY_CATEGORY_LABELS } from "@/lib/assistant/memory-extract";
 import { MEAL_TYPE_LABELS } from "@/lib/assistant/meals";
 import { checkOutput } from "@/lib/assistant/output-check";
-import { detectRoutineDone, doneClauses } from "@/lib/assistant/routine-detect";
+import {
+  detectMealLog,
+  formatMealLine,
+  isBareDone,
+  isUndoCommand,
+  mentionsEating,
+  resolvePending,
+  type KnownMeal,
+  type MealContext,
+  type MealEntry,
+  type PendingLog,
+  type PendingResolution,
+} from "@/lib/assistant/log-intent";
+import { CHAT_MARKABLE, detectRoutineDone, doneClauses } from "@/lib/assistant/routine-detect";
 import { extractTodoMarker, userAcceptedTodo, type TodoProposal } from "@/lib/assistant/todo-marker";
 import {
   buildSystemPrompt,
@@ -20,7 +33,7 @@ import {
 import { contentWords, formatTrDate, normalizeTr } from "@/lib/assistant/text";
 import { addDays, isoWeekday, istanbulNow, weekdayName } from "@/lib/assistant/time";
 import type { MealLogRow, RoutineItem, RoutineLogRow, TodoItem } from "@/lib/assistant/types";
-import { getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog, listSchedule, setRoutineDone } from "./assistant-repo";
+import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog, listSchedule, setRoutineDone } from "./assistant-repo";
 import {
   addMessage,
   createConversation,
@@ -160,17 +173,23 @@ function toContents(history: ChatMessage[]): LlmRequest["contents"] {
 }
 
 // ---------------------------------------------------------------------------
-// Sohbetten rutin işaretleme (görev dosyası istisnası: günlük "yapıldı" kaydı)
+// Sohbetten günlük kayıt (görev dosyası istisnası: "yapıldı" kaydı + öğün kaydı).
+// Niyeti de kaydı da KOD yapar (routine-detect.ts, log-intent.ts); model yalnızca
+// kısaca onaylar. Belirsizse kod tek kısa soru sorar, cevap gelince yazar.
 
 export interface ChatMarks {
-  /** "İşaretledim: …" satırı — yeni bir şey işaretlendiyse */
+  /** "İşaretledim: …" satırı — yeni bir şey işaretlendiyse/kaydedildiyse */
   message: ChatMessage | null;
   /** Modele giden kısa açıklama (yoksa boş) */
   context: string;
+  /** Belirsiz: modelin yerine sorulacak tek kısa soru (cevap gelince kod yazar) */
+  ask: { question: string; pending: PendingLog } | null;
 }
 
+const lower = (s: string) => s.toLocaleLowerCase("tr-TR");
+
 function routineLabels(items: RoutineItem[]): string {
-  return items.map((i) => ROUTINE_LABELS[i]).join(", ");
+  return items.map((i) => lower(ROUTINE_LABELS[i])).join(", ");
 }
 
 /** Başlığın anlamlı kelime kökleri (4 harf) — "20 dk hafif yürüyüş" → hafi, yuru */
@@ -187,44 +206,117 @@ function matchDoneTodos(todos: TodoItem[], message: string): TodoItem[] {
   return todos.filter((t) => !t.done && said.some((words) => titleStems(t.title).some((st) => words.includes(st))));
 }
 
+/** Bilinen yemek adları: tarif listesi + son 60 günün kayıtları (aynı ad bir kez). */
+async function knownMeals(db: Client, today: string): Promise<KnownMeal[]> {
+  const [meals, log] = await Promise.all([listMeals(db), listMealLog(db, addDays(today, -60), today)]);
+  const seen = new Set<string>();
+  return [...meals.map((m) => ({ id: m.id, name: m.name })), ...log.map((r) => ({ id: r.mealId, name: r.mealName }))].filter((k) => {
+    const key = normalizeTr(k.name);
+    return !seen.has(key) && Boolean(seen.add(key));
+  });
+}
+
+async function mealContext(db: Client, now: { date: string; time: string }, hitap: string, previous: ChatMessage | null): Promise<MealContext> {
+  const [brief, known] = await Promise.all([getDailyBrief(db, now.date, now.time), knownMeals(db, now.date)]);
+  const suggestions: MealContext["suggestions"] = {};
+  for (const m of brief.meals) {
+    if (m.suggestion.kind !== "yok") suggestions[m.mealType] = { id: m.suggestion.meal.id, name: m.suggestion.meal.name, leftover: m.suggestion.kind === "kalan" };
+  }
+  return { today: now.date, time: now.time, hitap, known, suggestions, previous: previous ? { content: previous.content, proactive: previous.meta?.proactive ?? null } : null };
+}
+
+/** Öğün kaydını yazar; aynı gün aynı öğünde aynı yemek zaten varsa yazmaz (null). */
+async function writeMeal(db: Client, e: MealEntry): Promise<number | null> {
+  const same = (await listMealLog(db, e.date, e.date)).some((r) => r.mealType === e.mealType && normalizeTr(r.mealName) === normalizeTr(e.mealName));
+  if (same) return null;
+  return addMealLog(db, e, "sohbet");
+}
+
+/** "İşaretledim: koşu, soğuk duş, öğle — menemen (4/5)" satırı — geri alınabilir. */
+async function addMarkLine(
+  db: Client,
+  conversationId: string,
+  p: { date: string; today: string; routine: RoutineItem[]; todos: TodoItem[]; meal: MealEntry | null; mealLogId: number | null },
+): Promise<ChatMessage | null> {
+  const labels = [...(p.routine.length ? [routineLabels(p.routine)] : []), ...p.todos.map((t) => t.title), ...(p.meal && p.mealLogId ? [formatMealLine(p.meal)] : [])].join(", ");
+  if (!labels) return null;
+  const dayNote = p.date === p.today ? "" : ` (${formatTrDate(p.date)})`;
+  return addMessage(db, {
+    conversationId,
+    role: "not",
+    content: `İşaretledim${dayNote}: ${labels}`,
+    mode: "yazi",
+    meta: {
+      routine: { date: p.date, items: p.routine },
+      ...(p.todos.length ? { todosDone: p.todos.map((t) => t.id) } : {}),
+      ...(p.mealLogId ? { mealLogId: p.mealLogId } : {}),
+    },
+  });
+}
+
 /**
- * Mert'in "koştum, duş aldım" gibi cümlelerini KOD yakalar (routine-detect.ts)
- * ve modelden ÖNCE işaretler — böylece model "işaretledim" diyebilir, "Bugün
+ * Mert'in "koştum, duş aldım", "öğlen menemen yedim, 4 puan" gibi cümlelerini KOD
+ * yakalar ve modelden ÖNCE yazar — böylece model "işaretledim" diyebilir, "Bugün
  * ekranından işaretleyin" demez. Zaten işaretli olan tekrar yazılmaz. Bugünün
  * yapılacaklarından adı geçen ("akşam yürüyüşünü yaptım") da kapatılır.
  */
-export async function markRoutineFromChat(db: Client, conversationId: string, history: ChatMessage[], message: string, now: { date: string; time: string }): Promise<ChatMarks> {
-  const previousAssistant = history.filter((m) => m.role === "assistant" && !m.meta?.system).at(-1)?.content ?? null;
+export async function logFromChat(
+  db: Client,
+  conversationId: string,
+  history: ChatMessage[],
+  message: string,
+  now: { date: string; time: string },
+  hitap: string,
+): Promise<ChatMarks> {
+  const lastAssistant = history.filter((m) => m.role === "assistant" && !m.meta?.system).at(-1) ?? null;
+  const previousAssistant = lastAssistant?.content ?? null;
   const [schedule, todayTodos] = await Promise.all([listSchedule(db), listTodos(db, now.date, now.date)]);
   const found = detectRoutineDone({ message, previousAssistant, today: now.date, time: now.time, itemsForDate: (d) => routineItemsForDay(schedule, dayTypeFor(d)) });
   const todos = matchDoneTodos(todayTodos, message);
-  if (!found.items.length && !found.notInPlan.length && !todos.length) return { message: null, context: "" };
+  const lines: string[] = [];
+  let ask: ChatMarks["ask"] = null;
+  let items = found.items;
 
-  const doneBefore = new Set((await listRoutineLog(db, found.date, found.date)).filter((r) => r.done).map((r) => r.item));
-  const fresh = found.items.filter((i) => !doneBefore.has(i));
-  const already = found.items.filter((i) => doneBefore.has(i));
+  // Tek başına "yaptım": planlı spor konuşmasına cevapsa günün sporu; değilse saati geçmiş son açık madde SORULUR.
+  if (!items.length && !todos.length && isBareDone(message) && !(previousAssistant ?? "").includes("?")) {
+    const done = new Set((await listRoutineLog(db, now.date, now.date)).filter((r) => r.done).map((r) => r.item));
+    const sport: RoutineItem = dayTypeFor(now.date) === "kosu" ? "kosu" : "yuruyus";
+    if (lastAssistant?.meta?.proactive === "spor" && !done.has(sport)) items = [sport];
+    else {
+      const candidate = scheduleForDay(schedule, dayTypeFor(now.date))
+        .filter((s) => s.routineItem && CHAT_MARKABLE.includes(s.routineItem) && s.time <= now.time && !done.has(s.routineItem))
+        .at(-1)?.routineItem;
+      if (candidate) ask = { question: `${hitap}, işaretleyeyim mi: ${lower(ROUTINE_LABELS[candidate])}?`, pending: { kind: "rutin", date: now.date, items: [candidate] } };
+    }
+  }
+
+  let meal: MealEntry | null = null;
+  if (mentionsEating(message)) {
+    const r = detectMealLog(message, await mealContext(db, now, hitap, lastAssistant));
+    if (r.kind === "kayit") meal = r.entry;
+    else if (r.kind === "sor" && !message.includes("?")) ask ??= { question: r.question, pending: r.pending };
+    else if (r.kind === "baska-gun") lines.push("Öğün yalnızca bugün ya da dün için kaydedilir; başka bir gün söylendiği için kaydedilmedi — kısaca söyle.");
+  }
+
+  const doneBefore = items.length ? new Set((await listRoutineLog(db, found.date, found.date)).filter((r) => r.done).map((r) => r.item)) : new Set<RoutineItem>();
+  const fresh = items.filter((i) => !doneBefore.has(i));
+  const already = items.filter((i) => doneBefore.has(i));
   for (const item of fresh) await setRoutineDone(db, found.date, item, true, "sohbet");
   for (const t of todos) await setTodoDone(db, t.id, true);
+  const mealLogId = meal ? await writeMeal(db, meal) : null;
 
-  const dayNote = found.date === now.date ? "" : ` (${formatTrDate(found.date)})`;
-  const labels = [...(fresh.length ? [routineLabels(fresh)] : []), ...todos.map((t) => t.title)].join(", ");
+  const date = fresh.length || todos.length ? found.date : (meal?.date ?? found.date);
+  const note = await addMarkLine(db, conversationId, { date, today: now.date, routine: fresh, todos, meal, mealLogId });
+  const dayNote = date === now.date ? "" : ` (${formatTrDate(date)})`;
   // Programda olmayan madde listedeki bir işle kapandıysa ("yürüdüm" → "20 dk hafif yürüyüş") ayrıca uyarma.
   const notInPlan = found.notInPlan.filter((i) => !todos.length || !titleStems(ROUTINE_LABELS[i]).some((st) => todos.some((t) => titleStems(t.title).includes(st))));
-  const lines: string[] = [];
-  if (labels) lines.push(`Sistem az önce işaretledi${dayNote}: ${labels}. Kısaca onayla ("İşaretledim").`);
+  if (note) lines.unshift(`Sistem az önce işaretledi${dayNote}: ${note.content.slice(note.content.indexOf(": ") + 2)}. Kısaca onayla ("İşaretledim").`);
   if (already.length) lines.push(`Zaten işaretliydi${dayNote}: ${routineLabels(already)}.`);
-  if (notInPlan.length) lines.push(`${routineLabels(notInPlan)} o günün programında yok — işaretlenmedi.`);
-
-  const note = labels
-    ? await addMessage(db, {
-        conversationId,
-        role: "not",
-        content: `İşaretledim${dayNote}: ${labels}`,
-        mode: "yazi",
-        meta: { routine: { date: found.date, items: fresh }, ...(todos.length ? { todosDone: todos.map((t) => t.id) } : {}) },
-      })
-    : null;
-  return { message: note, context: lines.join("\n") };
+  if (meal && !mealLogId) lines.push(`Zaten kayıtlıydı: ${formatMealLine(meal)}.`);
+  if (notInPlan.length) lines.push(`${ROUTINE_LABELS[notInPlan[0]]}${notInPlan.length > 1 ? `, ${routineLabels(notInPlan.slice(1))}` : ""} o günün programında yok — işaretlenmedi.`);
+  if (found.notAllowed?.length) lines.push("Temizlik sohbetten işaretlenmez, yalnızca Bugün ekranından — bunu kısaca söyle.");
+  if (found.otherDay) lines.push("Sohbetten yalnızca bugün ve dün işaretlenir; başka bir gün söylendiği için işaretlenmedi — kısaca söyle.");
+  return { message: note, context: lines.join("\n"), ask };
 }
 
 /** Bugün / yarın / "27 Ekim" */
@@ -246,22 +338,50 @@ async function addTodoFromChat(db: Client, conversationId: string, proposal: Tod
   return addMessage(db, { conversationId, role: "not", content: `Listeye ekledim: ${todo.title} — ${when}`, mode: "yazi", meta: { todoId: todo.id } });
 }
 
-/** Sohbetteki sistem satırının işlemini geri alır: işaretleme ya da listeye ekleme. */
+/** Sohbetteki sistem satırının işlemini geri alır: işaretleme, öğün kaydı ya da listeye ekleme. */
 export async function undoChatAction(db: Client, messageId: number): Promise<ChatMessage | null> {
   const m = await getMessage(db, messageId);
-  if (!m || m.role !== "not" || !(m.meta?.routine || m.meta?.todoId)) return null;
+  if (!m || m.role !== "not" || !(m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId)) return null;
   let content: string;
   if (m.meta.todoId) {
     await deleteTodo(db, m.meta.todoId);
     content = m.content.replace(/^Listeye ekledim/, "Listeden çıkarıldı");
   } else {
-    const { date, items } = m.meta.routine!;
+    const { date, items } = m.meta.routine ?? { date: "", items: [] };
     for (const item of items) await setRoutineDone(db, date, item, false, "sohbet");
     for (const id of m.meta.todosDone ?? []) await setTodoDone(db, id, false);
+    if (m.meta.mealLogId) await deleteMealLog(db, m.meta.mealLogId);
     content = m.content.replace(/^İşaretledim/, "İşaretleme geri alındı");
   }
   await updateMessage(db, m.id, content, { routineUndone: true });
   return { ...m, content, meta: { routineUndone: true } };
+}
+
+/** "Geri al" komutu: bu sohbetteki son (henüz geri alınmamış) kayıt satırı. */
+async function undoLast(db: Client, history: ChatMessage[]): Promise<ChatMessage | null> {
+  const last = history.filter((m) => m.role === "not" && (m.meta?.routine || m.meta?.todoId || m.meta?.mealLogId)).at(-1);
+  return last ? undoChatAction(db, last.id) : null;
+}
+
+/** Sorulan tek soruya gelen cevabı uygular; ekrana gidecek kısa cevabı ve kayıt satırını döner. */
+async function applyResolution(
+  db: Client,
+  conversationId: string,
+  r: Extract<PendingResolution, { kind: "ogun" | "rutin" }>,
+  today: string,
+  hitap: string,
+): Promise<{ note: ChatMessage | null; text: string }> {
+  if (r.kind === "ogun") {
+    const id = await writeMeal(db, r.entry);
+    if (!id) return { note: null, text: `${hitap}, bu zaten kayıtlı: ${formatMealLine(r.entry)}.` };
+    const note = await addMarkLine(db, conversationId, { date: r.entry.date, today, routine: [], todos: [], meal: r.entry, mealLogId: id });
+    return { note, text: `Tamam ${hitap}, yazdım.` };
+  }
+  const done = new Set((await listRoutineLog(db, r.date, r.date)).filter((x) => x.done).map((x) => x.item));
+  const fresh = r.items.filter((i) => !done.has(i));
+  for (const item of fresh) await setRoutineDone(db, r.date, item, true, "sohbet");
+  const note = await addMarkLine(db, conversationId, { date: r.date, today, routine: fresh, todos: [], meal: null, mealLogId: null });
+  return { note, text: fresh.length ? `Tamam ${hitap}, işaretledim.` : `${hitap}, o zaten işaretliydi.` };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +395,8 @@ export interface ChatResult {
   reply: ChatMessage;
   /** Sohbetten listeye ekleme satırı ("Listeye ekledim: …") — cevaptan sonra */
   todo: ChatMessage | null;
+  /** "Geri al" komutuyla geri alınan eski satırın yeni hâli (ekranda yerinde güncellenir) */
+  undone: ChatMessage | null;
   /** Yeniden üretildi mi (§ 7.5) */
   regenerated: boolean;
   /** Çıktı kontrolünde kalan sorunlar (2. denemeden sonra) — raporlama/test için */
@@ -297,10 +419,42 @@ export async function handleChat(
 
   const history = await listMessages(db, conversation.id);
   const userMessage = await addMessage(db, { conversationId: conversation.id, role: "user", content: input.message, mode: input.mode });
-  // Önce işaretle, sonra bugünün özetini oku — model güncel durumu görsün.
-  const marks = await markRoutineFromChat(db, conversation.id, history, input.message, now);
-
   const settings = await getSettings(db);
+  const conversationId = conversation.id;
+  // Koddan kısa cevap (model yok): "geri al", belirsizlik sorusu ve sorunun cevabı.
+  const direct = async (content: string, marks: ChatMessage | null, undone: ChatMessage | null = null, meta: ChatMessage["meta"] = null): Promise<ChatResult> => ({
+    conversationId,
+    userMessage,
+    marks,
+    reply: await addMessage(db, { conversationId, role: "assistant", content, mode: input.mode, meta }),
+    todo: null,
+    undone,
+    regenerated: false,
+    problems: [],
+  });
+
+  // 1) "Geri al": bu sohbetteki son kayıt silinir.
+  if (isUndoCommand(input.message)) {
+    const undone = await undoLast(db, history);
+    return direct(undone ? `Geri aldım: ${undone.content.slice(undone.content.indexOf(": ") + 2)}.` : "Geri alınacak bir kayıt yok.", null, undone);
+  }
+
+  // 2) Az önce sorulan tek soruya cevap ("Menemen öğle yemeği olarak mı yazayım?" → "evet" / "hayır, akşam").
+  const lastTurn = history.filter((m) => m.role !== "not").at(-1);
+  const pending = lastTurn?.role === "assistant" ? lastTurn.meta?.pending : undefined;
+  if (pending) {
+    const r = resolvePending(pending, input.message, pending.kind === "ogun" ? await knownMeals(db, now.date) : []);
+    if (r.kind === "vazgec") return direct(pending.kind === "ogun" ? "Tamam, yazmadım." : "Tamam, işaretlemedim.", null);
+    if (r.kind !== "ilgisiz") {
+      const applied = await applyResolution(db, conversationId, r, now.date, settings.hitap);
+      return direct(applied.text, applied.note);
+    }
+  }
+
+  // 3) Önce kaydet, sonra bugünün özetini oku — model güncel durumu görsün. Belirsizse kod tek soru sorar.
+  const marks = await logFromChat(db, conversationId, history, input.message, now, settings.hitap);
+  if (marks.ask) return direct(marks.ask.question, marks.message, null, { pending: marks.ask.pending });
+
   const models = modelsFrom(settings);
   const [brief, upcoming, facts, memories, allMessages, meals] = await Promise.all([
     getDailyBrief(db, now.date, now.time),
@@ -360,7 +514,7 @@ export async function handleChat(
     meta: result.ok ? null : { system: true },
   });
   const todo = await addTodoFromChat(db, conversation.id, proposal, input.message, now.date);
-  return { conversationId: conversation.id, userMessage, marks: marks.message, reply, todo, regenerated, problems, failure: result.ok ? undefined : result.reason };
+  return { conversationId: conversation.id, userMessage, marks: marks.message, reply, todo, undone: null, regenerated, problems, failure: result.ok ? undefined : result.reason };
 }
 
 // ---------------------------------------------------------------------------

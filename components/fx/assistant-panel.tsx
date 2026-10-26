@@ -4,15 +4,19 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { MessageCirclePlus } from "lucide-react";
 import { useChat } from "@/lib/assistant/use-chat";
 import { useDictation } from "@/lib/assistant/use-dictation";
+import { useAssistantSettings } from "@/lib/assistant/use-settings";
+import { speak, stopSpeaking, unlockVoice, useVoiceState } from "@/lib/assistant/voice";
 import { useToastStore } from "@/lib/store/toast-store";
 import { cn } from "@/lib/utils";
 import { AssistantMark, ChatList, ChatScroll, Composer, SuggestionChips } from "./chat-view";
 import { MicOrb } from "./mic-orb";
+import { useProactiveMessages } from "./proactive";
 
 // Asistan paneli (Faz 3): sohbet + mikrofon. Telefonda tam ekran (mikrofon alt
 // yarıda, tek elle); bilgisayarda 3 sütunlu görünümün ortası (büyük mikrofon,
-// altında sohbet). Mikrofon şimdilik tarayıcı dikte: söylenen yazıya dökülür ve
-// "ses" kipinde (kısa cevap) gönderilir; sesli cevap Faz 4'te.
+// altında sohbet). Mikrofon (Faz 4): tarayıcı konuşma tanıma (tr-TR) söyleneni yazıya
+// döker, "ses" kipinde (kısa cevap) gönderilir, cevap seçili sesle okunur; konuşurken
+// küreye dokunmak susturur. Planlı konuşmalar (proactive.tsx) bu sohbete eklenir.
 
 const SUGGESTIONS = ["Bugün ne yesem?", "Programım ne?", "Yarın ne var?", "Koştum"];
 
@@ -33,9 +37,14 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
   const chat = useChat();
   const [input, setInput] = useState("");
   const push = useToastStore((s) => s.push);
-  const dictation = useDictation((text) => {
-    void chat.send(text, "ses");
+  const settings = useAssistantSettings();
+  const voice = useVoiceState();
+  // Mikrofonla söylenen: "ses" kipinde (kısa cevap) gönderilir, cevap sesli okunur.
+  const dictation = useDictation(async (text) => {
+    const reply = await chat.send(text, "ses");
+    if (reply && settings.sesliOkuma) void speak(reply.content, settings.ses);
   });
+  useProactiveMessages(chat.receive);
 
   useEffect(() => {
     if (dictation.error) push({ title: dictation.error, variant: "danger" });
@@ -48,9 +57,15 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
   }
 
   function toggleMic() {
-    if (dictation.listening) dictation.stop();
+    // dokunuş: tarayıcının ses kilidini de açar (cevap sesli okunabilsin)
+    unlockVoice();
+    if (voice.speaking) stopSpeaking();
+    else if (dictation.listening) dictation.stop();
     else void dictation.start();
   }
+
+  const orbActive = dictation.listening || voice.speaking;
+  const orbSource = dictation.listening ? dictation.source : voice.speaking ? (voice.analyser ?? "demo") : null;
 
   const desktop = layout === "desktop";
   const mic = (
@@ -67,13 +82,13 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
       </p>
       <MicOrb
         size={desktop ? 150 : 96}
-        active={dictation.listening}
-        source={dictation.source}
+        active={orbActive}
+        source={orbSource}
         onClick={toggleMic}
-        label={dictation.listening ? "Konuşmayı bitir" : "Konuş"}
+        label={voice.speaking ? "Susmasını sağla" : dictation.listening ? "Konuşmayı bitir" : "Konuş"}
       />
       <p className={cn("fx-num text-[9.5px] tracking-[0.22em] text-[var(--fx-text-3)]", desktop ? "mt-8" : "mt-5")}>
-        {dictation.listening ? "BİTİRMEK İÇİN DOKUN" : chat.sending ? "DÜŞÜNÜYOR" : "DOKUN VE KONUŞ"}
+        {voice.speaking ? "KONUŞUYOR · SUSTURMAK İÇİN DOKUN" : dictation.listening ? "BİTİRMEK İÇİN DOKUN" : chat.sending ? "DÜŞÜNÜYOR" : "DOKUN VE KONUŞ"}
       </p>
     </div>
   );

@@ -7,9 +7,9 @@ tasarım token'ları ve "sıradaki adımlar" burada.
 ## 0. Durum
 
 > **YENİ (Ekim 2026): "MertOS Asistan" projesi başladı** — bkz. § 15. Görev
-> dosyası 5 fazlık; **Faz 1 tamam** (Turso, giriş, günlük motor), **Faz 2
-> kodu tamam** (Gemini sohbet, bağlam paketi, hafıza) — gerçek Gemini ile
-> senaryo turu Mert'in anahtarını bekliyor. Bildirimler
+> dosyası 5 fazlık; **Faz 1–3 tamam**, **Faz 4 kodu tamam** (ses, planlı
+> konuşma, sesle günlük kayıt — § 15.8; gerçek telefonda deneme Mert'te).
+> Bildirimler
 > bu planla KAPATILDI (§ 10 artık tarihsel). Aşağıdaki § 0–14 eski 1./2.
 > aşamayı anlatır ve hâlâ geçerli (eski modüller IndexedDB'de çalışmaya
 > devam ediyor).
@@ -470,13 +470,56 @@ dosyasındaki "ücretsiz katman" ilkesinin yerini aldı). Maliyet sigortası:
 Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ✅
 (senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam ✅
 (§ 15.7; Mert onayı sonrası uygulandı) · 4) ses + proaktif
-konuşma · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
+konuşma ✅ kod (§ 15.8; telefonda deneme Mert'te) · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
 kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
 depodaki varsayılan dal — `main` adında dal yok) gönderilir.
 
 **Görev dosyası bölümleri depoda:** `docs/gorev-dosyasi/` (Faz 3 tasarım
-tarifi: `faz-3-tasarim.md` — birebir uygulanır). Diğer fazların metni Mert
-yapıştırdıkça buraya eklenir.
+tarifi: `faz-3-tasarim.md` — birebir uygulanır; Faz 4: `faz-4-ses.md`).
+Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
+
+### 15.8 Ses, planlı konuşma, sesle günlük kayıt (Faz 4) — `docs/gorev-dosyasi/faz-4-ses.md`
+
+- **Sesli okuma** (`lib/assistant/voice.ts`, istemci): `speak(metin, seçim)` —
+  "gemini" → `POST /api/assistant/tts` (`callGeminiTts`, `TTS_MODELS`,
+  ses `Kore`; WAV ya da ham PCM→WAV; günlük sınıra sayılır) → AudioContext +
+  AnalyserNode (mikrofon küresi sesle dalgalanır); alınamazsa (kota/ağ/hata)
+  OTOMATİK tarayıcı sesi (`speechSynthesis`, tr-TR; başlamaz/bitmezse zaman
+  aşımı); o da yoksa yalnızca yazı. Ayar: `ses`, `sesliOkuma`, `proaktif`
+  (Ayarlar > Ses, `components/settings/voice-card.tsx`, "Dinle" düğmeleri;
+  istemci deposu `lib/assistant/use-settings.ts`). Mikrofonla sorulan "ses"
+  kipinde (kısa) gider ve okunur; yazılan okunmaz. Konuşurken küreye dokunmak susturur.
+- **Ses kilidi**: tarayıcılar dokunuşsuz sesi engeller → kabukta "Sesi başlat"
+  kartı (`StartVoiceBanner`) + ekrana ilk dokunuş `unlockVoice()`.
+- **Planlı konuşma** (bildirim YOK — uygulama kapalıyken konuşamaz):
+  `lib/assistant/proactive.ts` (saf): `slotTimes` (sabah = ilk sabah rutini,
+  spor, kahvaltı/öğle/akşam, temizlik, proje; su hedefi yok), `dueSlot`
+  (saatinden sonraki 30 dk, iş yapılmışsa söylenmez), `buildProactiveFacts`
+  (koddan veri: öneri, pişirme tarihi, önceki puan…), `fallbackProactiveText`.
+  `lib/server/proactive.ts` `handleProactive`: sunucu kendi saatiyle doğrular,
+  `proactive_log` (v5, PK date+slot) ile günde/cihazlar arası TEK kez, model
+  `buildProactivePrompt` (persona.ts; koç: sabah/spor, arkadaş: diğerleri)
+  ile cümle kurar; hata/kota/kesik/uydurma tarih → koddan cümle. Mesaj
+  asistan mesajı olarak son sohbete (`meta.proactive`). İstemci:
+  `components/fx/proactive.tsx` `ProactiveRunner` (kabukta, 30 sn'de bir son
+  özetle bakar → `POST /api/assistant/proactive`), sohbet ekranı
+  `useProactiveMessages` ile alır; ekran açık değilse toast.
+- **Sesle günlük kayıt** (LLM YOK, niyeti de kaydı da kod yapar):
+  `lib/assistant/log-intent.ts` — `detectMealLog` ("öğlen menemen yedim 4
+  puan", "…yedim çok güzeldi" → not; bilinen yemekle eşleşme; kalan porsiyon;
+  planlı "öğle vakti"ne "yedim" → önerilen yemek), `resolvePending`,
+  `isUndoCommand`, `isBareDone`. routine-detect: sohbetten yalnızca
+  `CHAT_MARKABLE` (temizlik YOK — Bugün ekranından), geçmiş gün yalnızca
+  açıkça "dün". `chat.ts` `logFromChat` (eski `markRoutineFromChat`) modelden
+  önce yazar; satır "İşaretledim: koşu, öğle — menemen (4/5)" (`meta.routine`
+  + `meta.mealLogId`). Belirsizse KOD tek soru sorar (model çağrılmaz;
+  asistan mesajı `meta.pending`), sonraki mesaj cevapsa kod yazar ("evet",
+  "hayır, akşam", "menemen"), ilgisizse bekleyen iş düşer. "geri al" → bu
+  sohbetteki son kayıt satırı geri alınır (model yok). `ChatResult.undone`.
+- Testler: `proactive.test.ts` (saf + sunucu), `log-intent.test.ts`,
+  `voice-log.test.ts` (10 gerçek cümle, sesli yazı biçiminde; ilk deneme 2/10
+  yanlış → düzeltildi, 0/10), `gemini.test.ts` (TTS). Gerçek Gemini:
+  `scenarios/proaktif.scenario.ts` (sonuç `scenarios/sonuclar/`, depoya girmez).
 
 ### 15.6 Hafızam (Faz 3)
 
@@ -506,7 +549,7 @@ yapıştırdıkça buraya eklenir.
 - Veri hook'ları: `lib/assistant/use-brief.ts` (günlük özet, iyimser
   işaretleme, çevrimdışı önbellek), `use-chat.ts` (sohbet + işlem kartları
   "Geri al"), `use-dictation.ts` (mikrofon: tarayıcı konuşma tanıma tr-TR →
-  "ses" kipinde gönderilir; sesli cevap Faz 4).
+  "ses" kipinde gönderilir; sesli cevap: § 15.8).
 - Yeni: `GET /api/assistant/health` (`computeHistory`: gün gün spor + rutin),
   `/saglik` (haftalık + son 7 gün + eski sağlık modülleri + eski MertOS
   paneli), `/projeler` (yaklaşan 7 gün yapılacaklar + Faz 5 yer tutucu),
@@ -528,7 +571,7 @@ yapıştırdıkça buraya eklenir.
   `MIGRATIONS` dizisi; **yayınlanmış adımı değiştirme, yeni adım ekle**),
   FTS5 (`memories_fts`, oluşturulamazsa `ftsAvailable=false`), varsayılan
   program/temizlik tablosu (tablo boşsa), tarif senkronu.
-- Tablolar: `todos` (v4, yapılacaklar; yumuşak silme), `settings` (anahtar/JSON değer), `schedule_items`,
+- Tablolar: `proactive_log` (v5, planlı konuşma — günde bir kez), `todos` (v4, yapılacaklar; yumuşak silme), `settings` (anahtar/JSON değer), `schedule_items`,
   `routine_log` (PK date+item), `meals`, `meal_log` (soft delete),
   `chores` (rotation JSON), `memories` (+`memories_fts`),
   `conversations`, `messages`, `projects`, `project_state`,
@@ -625,8 +668,8 @@ yapıştırdıkça buraya eklenir.
   `lib/assistant/routine-detect.ts` — LLM'siz, deterministik. "koştum, duş
   da aldım", "sabah rutinini yaptım", asistanın "Koşuyu yaptınız mı?"
   sorusuna "evet" → o günün programındaki maddeler; olumsuz/gelecek/soru/
-  istek cümleleri, öğleden sonra "kalktım/su içtim", 7 günden eski ya da
-  birden çok gün anılan mesajlar atlanır. `markRoutineFromChat` modelden
+  istek cümleleri, öğleden sonra "kalktım/su içtim", "dün" dışında bir gün ya da
+  birden çok gün anılan mesajlar atlanır (Faz 4). `logFromChat` modelden
   ÖNCE işaretler (`source = "sohbet"`), "İşaretledim: …" satırı (rol `not`,
   `meta.routine`) + "Geri al" (`DELETE /api/assistant/chat/marks/[id]`).
   Elle işaretleme (Bugün ekranı) aynen duruyor.

@@ -143,6 +143,17 @@ export const MIGRATIONS: string[][] = [
     )`,
     `CREATE INDEX IF NOT EXISTS todos_date ON todos(date)`,
   ],
+  // v5 — Faz 4 planlı konuşma: her an (sabah, spor, öğle…) günde bir kez söylenir;
+  // birden çok cihaz/sekme açıkken de tek kez (satırı ilk yazan konuşur).
+  [
+    `CREATE TABLE IF NOT EXISTS proactive_log (
+      date TEXT NOT NULL,
+      slot TEXT NOT NULL,
+      message_id INTEGER,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (date, slot)
+    )`,
+  ],
 ];
 
 /**

@@ -72,3 +72,51 @@ describe("Gemini düşünme ayarı ve kesilme", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("Gemini sesi (TTS)", () => {
+  async function tts(responses: { status: number; body: object }[]) {
+    vi.stubEnv("GEMINI_API_KEY", "k");
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      urls.push(url);
+      const r = responses[Math.min(urls.length - 1, responses.length - 1)];
+      return new Response(JSON.stringify(r.body), { status: r.status });
+    });
+    const { callGeminiTts } = await import("./gemini");
+    return { r: await callGeminiTts("Merhaba", ["a-tts", "b-tts"], "Kore"), urls };
+  }
+  const audio = (mimeType: string, bytes: number[]) => ({
+    candidates: [{ content: { parts: [{ inlineData: { mimeType, data: Buffer.from(bytes).toString("base64") } }] } }],
+  });
+
+  it("ham PCM'i 44 baytlık WAV başlığıyla sarar", async () => {
+    const { r } = await tts([{ status: 200, body: audio("audio/L16;codec=pcm;rate=24000", [1, 0, 2, 0]) }]);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const head = new TextDecoder().decode(r.wav.slice(0, 4));
+    const view = new DataView(r.wav.buffer);
+    expect(head).toBe("RIFF");
+    expect(view.getUint32(24, true)).toBe(24000);
+    expect(r.wav.length).toBe(48);
+  });
+  it("WAV gelirse olduğu gibi geçirir", async () => {
+    const { r } = await tts([{ status: 200, body: audio("audio/wav", [82, 73, 70, 70]) }]);
+    expect(r.ok && Array.from(r.wav)).toEqual([82, 73, 70, 70]);
+  });
+  it("kota dolarsa sıradaki modele geçer; anahtar URL'de gitmez", async () => {
+    const { r, urls } = await tts([
+      { status: 429, body: { error: { message: "quota" } } },
+      { status: 200, body: audio("audio/wav", [1]) },
+    ]);
+    expect(r.ok && r.model).toBe("b-tts");
+    expect(urls.every((u) => !u.includes("k@") && !u.includes("key="))).toBe(true);
+  });
+  it("anahtar yoksa istek atmadan yapılandırma hatası", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { callGeminiTts } = await import("./gemini");
+    expect(await callGeminiTts("x", ["a"], "Kore")).toMatchObject({ ok: false, reason: "yapilandirma" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

@@ -106,7 +106,7 @@ export function fetchAssistantSettings() {
   return request<AssistantSettings>("/api/assistant/settings");
 }
 
-export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "arka" | "ses">>) {
+export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "arka" | "ses" | "sesliOkuma" | "proaktif">>) {
   return request<AssistantSettings>("/api/assistant/settings", { method: "PATCH", body: JSON.stringify(patch) });
 }
 
@@ -123,7 +123,7 @@ export interface ClientChatMessage {
   role: "user" | "assistant" | "not";
   content: string;
   createdAt: string;
-  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; todosDone?: number[]; todoId?: number; routineUndone?: boolean; system?: boolean } | null;
+  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; todosDone?: number[]; todoId?: number; mealLogId?: number; routineUndone?: boolean; system?: boolean; proactive?: string } | null;
 }
 
 const CONVERSATION_KEY = "mertos-sohbet-id";
@@ -152,7 +152,7 @@ export function fetchChat(conversationId: string | null) {
 
 /** `mode`: "ses" → kısa, sesli okunacak cevap (mikrofonla söylenen mesajlar). */
 export function sendChat(conversationId: string | null, message: string, mode: "yazi" | "ses" = "yazi") {
-  return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; todo: ClientChatMessage | null; failure: string | null }>("/api/assistant/chat", {
+  return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; todo: ClientChatMessage | null; undone: ClientChatMessage | null; failure: string | null }>("/api/assistant/chat", {
     method: "POST",
     body: JSON.stringify({ conversationId, message, mode }),
   });
@@ -205,4 +205,14 @@ export function deleteMemoryNote(id: number) {
 /** Sohbetteki "İşaretledim" / "Listeye ekledim" satırını geri al. */
 export function undoChatMark(messageId: number) {
   return request<{ message: ClientChatMessage }>(`/api/assistant/chat/marks/${messageId}`, { method: "DELETE" });
+}
+
+// --- Planlı konuşma (Faz 4) ----------------------------------------------------
+
+/** Program saati geldi: sunucu doğrular, söylenecekse sohbete yazıp döner (yoksa message: null). */
+export function requestProactive(slot: string, conversationId: string | null) {
+  return request<{ message: ClientChatMessage | null; reason?: string; spoken: string[] }>("/api/assistant/proactive", {
+    method: "POST",
+    body: JSON.stringify({ slot, conversationId }),
+  });
 }

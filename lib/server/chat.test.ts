@@ -106,9 +106,9 @@ describe("sohbetten rutin işaretleme", () => {
   it("'koştum, duş da aldım' modelden önce işaretlenir, satırı geri alınabilir", async () => {
     const llm = fakeLlm(["Süper Mert Bey, ikisini de işaretledim."]);
     const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Koştum, duş da aldım.", mode: "yazi" });
-    expect(r.marks?.content).toBe("İşaretledim: Soğuk duş, Koşu");
+    expect(r.marks?.content).toBe("İşaretledim: soğuk duş, koşu");
     expect(r.marks?.meta?.routine).toEqual({ date: "2026-10-26", items: ["soguk_dus", "kosu"] });
-    expect(llm.calls[0].system).toContain("Sistem az önce işaretledi: Soğuk duş, Koşu");
+    expect(llm.calls[0].system).toContain("Sistem az önce işaretledi: soğuk duş, koşu");
     expect(llm.calls[0].system).toMatch(/Yapılanlar: .*Koşu/);
     // "not" satırı modele geçmiş olarak gitmez
     expect(llm.calls[0].contents.some((c) => c.text.includes("İşaretledim"))).toBe(false);
@@ -119,10 +119,10 @@ describe("sohbetten rutin işaretleme", () => {
     const again = fakeLlm(["Tamam."]);
     const r2 = await handleChat({ db, llm: again.fn, fts: true, now: NOW }, { conversationId: r.conversationId, message: "Koştum", mode: "yazi" });
     expect(r2.marks).toBeNull();
-    expect(again.calls[0].system).toContain("Zaten işaretliydi: Koşu");
+    expect(again.calls[0].system).toContain("Zaten işaretliydi: koşu");
 
     const undone = await undoChatAction(db, r.marks!.id);
-    expect(undone?.content).toBe("İşaretleme geri alındı: Soğuk duş, Koşu");
+    expect(undone?.content).toBe("İşaretleme geri alındı: soğuk duş, koşu");
     expect(undone?.meta).toEqual({ routineUndone: true });
     expect((await listRoutineLog(db, "2026-10-26", "2026-10-26")).filter((x) => x.done).map((x) => x.item)).not.toContain("kosu");
     expect(await undoChatAction(db, r.marks!.id)).toBeNull();

@@ -9,6 +9,9 @@ import type { RoutineItem } from "./types";
 // Yanlış pozitif yanlış negatiften kötü: olumsuz ("koşmadım"), gelecek
 // ("koşacağım"), soru ("koştum mu?") ve istek ("koşmalıyım") cümleleri atlanır.
 // Her işaretleme sohbette "İşaretledim: …" satırı olarak görünür, geri alınabilir.
+// Faz 4: sohbetten yalnızca izinli liste (uyanış, buzlu su, su içme, soğuk duş,
+// koşu/yürüyüş, wall sit, su hedefi) işaretlenir — temizlik yalnızca Bugün
+// ekranından. Kayıt bugüne; geçmiş güne yalnızca açıkça "dün" denirse.
 
 /** Geçmiş zaman 1. tekil/çoğul ek (normalize edilmiş): -dım/-tım/-dik/-mıştım… */
 const PAST = "(?:d|t)[iu](?:m|k)";
@@ -69,12 +72,12 @@ const RULES: Record<RoutineItem, ItemRule> = {
     verbs: [new RegExp(`\\bduvarda (?:oturd|bekled|durd)[iu](?:m|k)\\b`)],
   },
   su: {
-    stem: /\b(?:su hedef\w*|gunluk su\w*|\d+(?: \d+)? (?:litre|lt))\b/,
+    stem: /\b(?:su hedef\w*|gunluk su\w*|(?:\d+|bir|iki|uc|dort|bes)(?: \d+| bucuk)? (?:litre|lt))\b/,
     verbsOnly: true,
     verbs: [
       new RegExp(`\\b(?:su hedef\\w*|gunluk su\\w*|suyumu)\\b.*\\b(?:tamamla|bitir|doldur|yap|tuttur)(?:${PAST})\\b`),
       new RegExp(`\\b(?:su hedef\\w*|gunluk su\\w*) (?:tamam|tamamdir|bitti|doldu)\\b`),
-      new RegExp(`\\b\\d+(?: \\d+)? (?:litre|lt) su ict[iu](?:m|k)\\b`),
+      new RegExp(`\\b(?:\\d+|bir|iki|uc|dort|bes)(?: \\d+| bucuk)? (?:litre|lt) su ict[iu](?:m|k)\\b`),
     ],
   },
   temizlik: {
@@ -91,13 +94,16 @@ const RULES: Record<RoutineItem, ItemRule> = {
 
 const MORNING_ROUTINE: RoutineItem[] = ["uyanis", "buzlu_su", "hidrasyon", "soguk_dus"];
 
+/** Sohbetten işaretlenebilen maddeler (görev dosyası Faz 4 § 3). Temizlik yok. */
+export const CHAT_MARKABLE: RoutineItem[] = ["uyanis", "buzlu_su", "hidrasyon", "soguk_dus", "kosu", "yuruyus", "wall_sit", "su"];
+
 /** Olumsuz: "koşmadım", "almadım", "yapamadım", "hayır", "atladım"… */
-const NEGATIVE = /m[ae]d[iu](?:m|k)\b|m[ae]m[iu]st[iu]|[ae]m[ae]d[iu]|\b(?:hayir|atlad\w*|kacird\w*|olmadi|yok|degil)\b/;
+export const NEGATIVE = /m[ae]d[iu](?:m|k)\b|m[ae]m[iu]st[iu]|[ae]m[ae]d[iu]|\b(?:hayir|atlad\w*|kacird\w*|olmadi|yok|degil)\b/;
 /** Gelecek / istek / koşul / soru: bunlar "yaptım" sayılmaz. */
-const NOT_DONE =
+export const NOT_DONE =
   /[ae]c[ae](?:k|g)\w*|\b\w+(?<!ak)(?:sam|sem)\b|\b\w+(?:maliyim|meliyim|mali|meli)\b|\b(?:yarin|lazim|gerek|istiyorum|dusunuyorum|planliyorum|niyetim|birazdan|simdi cikiyorum)\b|\bm[iu](?:yim|sun|yiz|yum|yuz|sin)?\b/;
 /** Soruya kısa olumlu cevap */
-const AFFIRMATIVE = /^(?:evet|eveet|he|hi hi|tabii|tabi|elbette|aynen|yaptim|yapildi|hallettim|bitirdim|tamamladim|tamamdir|ikisini de|hepsini|hepsi)\b/;
+export const AFFIRMATIVE = /^(?:evet|eveet|he|hi hi|tabii|tabi|elbette|aynen|yaptim|yapildi|hallettim|bitirdim|tamamladim|tamamdir|ikisini de|hepsini|hepsi)\b/;
 const ALL_WORDS = /\b(?:hepsi\w*|ikisi\w*|ucu de|ucunu de|tumu\w*)\b/;
 
 export interface DetectInput {
@@ -117,10 +123,14 @@ export interface DetectResult {
   items: RoutineItem[];
   /** Söylendi ama o günün programında yok (ör. yürüyüş gününde koşu) */
   notInPlan: RoutineItem[];
+  /** Söylendi ama sohbetten işaretlenmez (temizlik — Bugün ekranından) */
+  notAllowed?: RoutineItem[];
+  /** Bugün/dün dışında bir gün anıldığı için hiçbir şey işaretlenmedi */
+  otherDay?: boolean;
 }
 
 /** Ham metni cümle/yan cümle parçalarına böler; her parçanın soru olup olmadığı da döner. */
-function clauses(message: string): { text: string; question: boolean }[] {
+export function clauses(message: string): { text: string; question: boolean }[] {
   const out: { text: string; question: boolean }[] = [];
   for (const m of message.matchAll(/[^.,;!?\n]+([.,;!?\n]*)/g)) {
     const question = m[1].includes("?");
@@ -170,11 +180,13 @@ function doneItemsInClause(text: string): RoutineItem[] {
 
 export function detectRoutineDone(input: DetectInput): DetectResult {
   const { today } = input;
-  // Tarih: gün anılmadıysa bugün; tek bir yakın geçmiş gün anıldıysa ("dün yürüdüm") o gün.
-  // Birden çok gün ya da 7 günden eski bir gün anıldıysa hiçbir şey işaretlenmez (belirsiz).
-  const refs = parseDayReferences(input.message, today);
-  if (refs.length > 1 || (refs.length === 1 && (refs[0] > today || refs[0] < addDays(today, -7)))) return { date: today, items: [], notInPlan: [] };
-  const date = refs[0] ?? today;
+  // Tarih: gün anılmadıysa bugün; yalnızca açıkça "dün" denirse dün. Başka bir gün
+  // ("2 gün önce", "geçen salı") ya da birden çok gün anıldıysa hiçbir şey işaretlenmez.
+  const refs = parseDayReferences(input.message, today).filter((d) => d !== today);
+  const yesterday = addDays(today, -1);
+  const saidYesterday = refs.length === 1 && refs[0] === yesterday && /\bdun\b/.test(normalizeTr(input.message));
+  if (refs.length > 0 && !saidYesterday) return { date: today, items: [], notInPlan: [], otherDay: doneClauses(input.message).length > 0 };
+  const date = saidYesterday ? yesterday : today;
 
   const parts = clauses(input.message);
   const said = new Set<RoutineItem>();
@@ -205,5 +217,11 @@ export function detectRoutineDone(input: DetectInput): DetectResult {
 
   const plan = new Set(input.itemsForDate(date));
   const ordered = (Object.keys(RULES) as RoutineItem[]).filter((i) => said.has(i));
-  return { date, items: ordered.filter((i) => plan.has(i)), notInPlan: ordered.filter((i) => !plan.has(i)) };
+  const allowed = ordered.filter((i) => CHAT_MARKABLE.includes(i));
+  return {
+    date,
+    items: allowed.filter((i) => plan.has(i)),
+    notInPlan: allowed.filter((i) => !plan.has(i)),
+    notAllowed: ordered.filter((i) => !CHAT_MARKABLE.includes(i)),
+  };
 }

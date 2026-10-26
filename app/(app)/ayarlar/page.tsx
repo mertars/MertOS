@@ -11,6 +11,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { AssistantSettingsCard } from "@/components/settings/assistant-settings-card";
 import { AppearanceCard } from "@/components/settings/appearance-card";
+import { VoiceCard } from "@/components/settings/voice-card";
 import { ModuleToggleList } from "@/components/settings/module-toggle-list";
 import { PinSetupSheet } from "@/components/settings/pin-setup-sheet";
 import { DangerZoneSheet } from "@/components/settings/danger-zone-sheet";
@@ -146,6 +147,7 @@ export default function AyarlarPage() {
 
         {/* Bildirimler kapatıldı (görev dosyası § 15) — sayfa kodu duruyor ama menüden kaldırıldı. */}
         <AppearanceCard />
+        <VoiceCard />
         <AssistantSettingsCard />
 
         <Card>

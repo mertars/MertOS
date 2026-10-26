@@ -14,16 +14,21 @@ export function dailyLimitFromEnv(env: Record<string, string | undefined> = proc
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_DAILY_LIMIT;
 }
 
+/** Bugünün sayacını bir artırır; sınır aşıldıysa false (çağrı yapılmamalı). Ses üretimi de buraya sayılır. */
+export async function consumeDailyCall(db: Client, limit: number, now: Date = new Date()): Promise<boolean> {
+  const date = istanbulNow(now).date;
+  const row = (
+    await db.execute({
+      sql: `INSERT INTO llm_usage (date, calls) VALUES (?, 1) ON CONFLICT(date) DO UPDATE SET calls = calls + 1 RETURNING calls`,
+      args: [date],
+    })
+  ).rows[0];
+  return Number(row.calls) <= limit;
+}
+
 export function withDailyLimit(db: Client, llm: LlmFn, limit: number, now: () => Date = () => new Date()): LlmFn {
   return async (req) => {
-    const date = istanbulNow(now()).date;
-    const row = (
-      await db.execute({
-        sql: `INSERT INTO llm_usage (date, calls) VALUES (?, 1) ON CONFLICT(date) DO UPDATE SET calls = calls + 1 RETURNING calls`,
-        args: [date],
-      })
-    ).rows[0];
-    if (Number(row.calls) > limit) {
+    if (!(await consumeDailyCall(db, limit, now()))) {
       return { ok: false, reason: "kota", detail: `günlük sınır (${limit}) doldu` };
     }
     return llm(req);

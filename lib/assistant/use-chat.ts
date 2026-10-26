@@ -57,7 +57,7 @@ export function toChatItems(messages: ClientChatMessage[], now = new Date()): Ch
     else {
       const { title, detail } = splitLine(m.content);
       const meta = m.meta;
-      if (meta?.routine) out.push({ kind: "islem", key, id: m.id, type: "isaret", title, detail });
+      if (meta?.routine || meta?.mealLogId) out.push({ kind: "islem", key, id: m.id, type: "isaret", title, detail });
       else if (meta?.todoId) out.push({ kind: "islem", key, id: m.id, type: "liste", title, detail });
       else if (meta?.memoryId) out.push({ kind: "islem", key, id: m.id, type: "not", title, detail });
       else {
@@ -102,10 +102,10 @@ export function useChat() {
     };
   }, []);
 
-  /** Mesaj gönderir; başarısızsa false döner (metin geri konabilsin diye). */
-  async function send(text: string, mode: ChatMode = "yazi"): Promise<boolean> {
+  /** Mesaj gönderir; asistanın cevabını döner, başarısızsa null (metin geri konabilsin diye). */
+  async function send(text: string, mode: ChatMode = "yazi"): Promise<ClientChatMessage | null> {
     const message = text.trim();
-    if (!message || sending) return false;
+    if (!message || sending) return null;
     setSending(true);
     const optimistic: ClientChatMessage = { id: -Date.now(), conversationId: conversationId ?? "", role: "user", content: message, createdAt: new Date().toISOString(), meta: null };
     setMessages((m) => [...(m ?? []), optimistic]);
@@ -114,18 +114,39 @@ export function useChat() {
       const fresh = [r.userMessage, r.marks, r.reply, r.todo].filter((x): x is ClientChatMessage => x !== null);
       // Yeni sohbet açıldıysa (ilk mesaj ya da uzun sessizlik) ekranda yalnızca yenisi.
       if (r.conversationId !== conversationId) setMessages(fresh);
-      else setMessages((m) => [...(m ?? []).filter((x) => x.id !== optimistic.id), ...fresh]);
+      else
+        setMessages((m) => [
+          // "geri al" komutu eski satırı yerinde günceller
+          ...(m ?? []).filter((x) => x.id !== optimistic.id).map((x) => (r.undone && x.id === r.undone.id ? r.undone : x)),
+          ...fresh,
+        ]);
       setConversationId(r.conversationId);
       conversationRef.current = r.conversationId;
       storeConversationId(r.conversationId);
-      return true;
+      return r.reply;
     } catch (err) {
       setMessages((m) => (m ?? []).filter((x) => x.id !== optimistic.id));
       push({ title: "Gönderilemedi", description: err instanceof Error ? err.message : undefined, variant: "danger" });
-      return false;
+      return null;
     } finally {
       setSending(false);
     }
+  }
+
+  /** Planlı konuşma (Faz 4) sunucuda bir sohbete yazıldı: bu sohbetse ekle, değilse o sohbete geç. */
+  function receive(message: ClientChatMessage) {
+    if (message.conversationId === conversationRef.current) {
+      setMessages((m) => (m?.some((x) => x.id === message.id) ? m : [...(m ?? []), message]));
+      return;
+    }
+    fetchChat(message.conversationId)
+      .then((r) => {
+        setConversationId(r.conversationId);
+        conversationRef.current = r.conversationId;
+        storeConversationId(r.conversationId);
+        setMessages(r.messages);
+      })
+      .catch(() => null);
   }
 
   async function newConversation() {
@@ -161,5 +182,5 @@ export function useChat() {
   }
 
   const items = useMemo(() => (messages ? toChatItems(messages) : []), [messages]);
-  return { items, loaded: messages !== null, empty: messages?.length === 0, sending, online, send, newConversation, undo };
+  return { items, loaded: messages !== null, empty: messages?.length === 0, sending, online, send, receive, newConversation, undo };
 }

@@ -1,5 +1,6 @@
 import type { Client, Row } from "@libsql/client";
 import type { ChatMode } from "@/lib/assistant/persona";
+import type { PendingLog } from "@/lib/assistant/log-intent";
 import type { RoutineItem } from "@/lib/assistant/types";
 
 // Sohbetler ve mesajlar. Rol "not" = sistem satırı: "Not aldım: …" (meta.memoryId)
@@ -25,8 +26,14 @@ export interface ChatMessage {
     routine?: { date: string; items: RoutineItem[] };
     todosDone?: number[];
     todoId?: number;
+    /** Sohbetten yazılan öğün kaydı (Faz 4) — "Geri al" siler */
+    mealLogId?: number;
+    /** Asistan tek kısa soru sordu ("Menemen öğle yemeği olarak mı yazayım?"); cevap gelince kod yazar */
+    pending?: PendingLog;
     routineUndone?: boolean;
     system?: boolean;
+    /** Planlı konuşma (Faz 4): programdaki saat gelince asistanın kendiliğinden söylediği */
+    proactive?: string;
   } | null;
 }
 

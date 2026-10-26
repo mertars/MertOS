@@ -106,3 +106,78 @@ async function callOnce(model: string, req: LlmRequest, key: string, thinking = 
   }
   return { ok: true, text, model, ...(candidate?.finishReason === "MAX_TOKENS" ? { truncated: true } : {}) };
 }
+
+// ---------------------------------------------------------------------------
+// Ses (Faz 4): Gemini TTS. Yeni modeller `audio/wav`, eski önizleme modelleri
+// `audio/L16;rate=24000` (ham 16 bit PCM) döndürür — ikisi de WAV'a çevrilir.
+
+export type TtsResult = { ok: true; wav: Uint8Array; model: string } | { ok: false; reason: LlmFailure; detail: string };
+
+/** 16 bit mono PCM'i WAV dosyasına sarar. */
+export function pcmToWav(pcm: Uint8Array, sampleRate: number): Uint8Array {
+  const out = new Uint8Array(44 + pcm.length);
+  const v = new DataView(out.buffer);
+  const ascii = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  ascii(0, "RIFF");
+  v.setUint32(4, 36 + pcm.length, true);
+  ascii(8, "WAVE");
+  ascii(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ascii(36, "data");
+  v.setUint32(40, pcm.length, true);
+  out.set(pcm, 44);
+  return out;
+}
+
+interface TtsResponse {
+  candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[];
+  error?: { code?: number; message?: string };
+}
+
+export async function callGeminiTts(text: string, models: readonly string[], voice: string): Promise<TtsResult> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return { ok: false, reason: "yapilandirma", detail: "GEMINI_API_KEY yok" };
+  let last: TtsResult = { ok: false, reason: "hata", detail: "model listesi boş" };
+  for (const model of models) {
+    last = await ttsOnce(model, text, voice, key);
+    if (last.ok) return last;
+    if (!(last.reason === "kota" || last.detail.startsWith("404"))) return last;
+  }
+  return last;
+}
+
+async function ttsOnce(model: string, text: string, voice: string, key: string): Promise<TtsResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    return { ok: false, reason: "ag", detail: e instanceof Error ? e.message : "ağ hatası" };
+  }
+  const data = (await res.json().catch(() => ({}))) as TtsResponse;
+  if (res.status === 429) return { ok: false, reason: "kota", detail: `429 ${data.error?.message ?? ""}` };
+  if (!res.ok) {
+    console.error(`[mertos] Gemini TTS ${model} ${res.status}:`, data.error?.message);
+    return { ok: false, reason: res.status >= 500 ? "ag" : "hata", detail: `${res.status} ${data.error?.message ?? ""}` };
+  }
+  const inline = data.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
+  if (!inline?.data) return { ok: false, reason: "hata", detail: "boş ses" };
+  const bytes = Uint8Array.from(Buffer.from(inline.data, "base64"));
+  const mime = (inline.mimeType ?? "").toLowerCase();
+  if (mime.startsWith("audio/wav") || mime.startsWith("audio/x-wav")) return { ok: true, wav: bytes, model };
+  const rate = Number(/rate=(\d+)/.exec(mime)?.[1] ?? 24000);
+  return { ok: true, wav: pcmToWav(bytes, rate), model };
+}

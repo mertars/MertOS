@@ -10,6 +10,16 @@ export const DEFAULT_MODELS = {
   light: "gemini-flash-lite-latest",
 } as const;
 
+/**
+ * Gemini sesi (Faz 4): ilk model hata/kota verirse sıradaki denenir; ikisi de
+ * olmazsa istemci tarayıcının hazır sesine döner. 3.8 modelleri doğrudan WAV,
+ * eski önizleme modelleri ham PCM döndürür (lib/server/gemini.ts ikisini de çevirir).
+ */
+export const TTS_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"] as const;
+export const TTS_VOICE = "Kore";
+/** Tek seferde seslendirilecek en uzun metin (karakter) — ses modunda cevap zaten 2-3 cümle. */
+export const TTS_MAX_CHARS = 600;
+
 export type EffectLevel = "tam" | "orta" | "dusuk" | "kapali";
 export type VoiceChoice = "tarayici" | "gemini";
 /** Arka plan (Faz 3): ince ışık çizgilerinden dalga yüzeyi ya da cilalı siyahta ışık + toz. */
@@ -20,6 +30,10 @@ export interface AssistantSettings {
   efekt: EffectLevel;
   arka: BackgroundChoice;
   ses: VoiceChoice;
+  /** Sesle sorulan soruların cevabını ve planlı konuşmaları sesli oku (kapalıysa yalnızca metin). */
+  sesliOkuma: boolean;
+  /** Program saatlerinde asistan kendiliğinden konuşsun (uygulama açıkken). */
+  proaktif: boolean;
   modelChat: string;
   modelLight: string;
 }
@@ -29,6 +43,8 @@ export const DEFAULT_SETTINGS: AssistantSettings = {
   efekt: "tam",
   arka: "dalga",
   ses: "tarayici",
+  sesliOkuma: true,
+  proaktif: true,
   modelChat: DEFAULT_MODELS.chat,
   modelLight: DEFAULT_MODELS.light,
 };

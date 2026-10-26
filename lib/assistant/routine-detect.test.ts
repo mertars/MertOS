@@ -23,8 +23,6 @@ describe("detectRoutineDone — 'yaptım' cümleleri", () => {
     ["6'da kalktım, yüzümü buza soktum, su içtim, soğuk duş aldım.", ["uyanis", "buzlu_su", "hidrasyon", "soguk_dus"]],
     ["Sabah rutinini yaptım", ["uyanis", "buzlu_su", "hidrasyon", "soguk_dus"]],
     ["Hidrasyonu yaptım, soğuk duş da aldım", ["hidrasyon", "soguk_dus"]],
-    ["Bulaşıkları yıkadım", ["temizlik"]],
-    ["Temizliği hallettim", ["temizlik"]],
   ])("%s", (message, expected) => {
     const r = detect(message, { time: message.includes("kalktım") || message.includes("Sabah") ? "07:00" : "08:00" });
     expect(r.date).toBe(MON);
@@ -84,6 +82,14 @@ describe("detectRoutineDone — gün ve program", () => {
   it("eski ya da birden çok gün anılınca hiçbir şey işaretlenmez", () => {
     expect(detect("15 Eylül'de koştum").items).toEqual([]);
     expect(detect("Dün koşmadım ama bugün koştum").items).toEqual([]);
+  });
+  it("geçmiş güne yalnızca açıkça 'dün' denirse: '2 gün önce' / 'geçen cumartesi' işaretlenmez", () => {
+    expect(detect("2 gün önce yürüdüm")).toMatchObject({ items: [], otherDay: true });
+    expect(detect("Geçen cumartesi yürüdüm")).toMatchObject({ items: [], otherDay: true });
+  });
+  it("temizlik sohbetten işaretlenmez (yalnızca Bugün ekranından)", () => {
+    expect(detect("Bulaşıkları yıkadım")).toMatchObject({ items: [], notAllowed: ["temizlik"] });
+    expect(detect("Koştum, temizliği de hallettim")).toMatchObject({ items: ["kosu"], notAllowed: ["temizlik"] });
   });
 });
 

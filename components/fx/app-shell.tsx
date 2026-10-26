@@ -6,6 +6,7 @@ import { Brain, CalendarDays, FolderGit2, HeartPulse, MessageCircle } from "luci
 import { fetchAssistantSettings } from "@/lib/assistant/client";
 import { cn } from "@/lib/utils";
 import { EffectLevelProvider } from "./effect-level";
+import { ProactiveRunner, StartVoiceBanner } from "./proactive";
 import { Wallpaper } from "./wallpaper";
 
 // Faz 3 uygulama kabuğu: efekt seviyesi + hareketli arka plan + gezinme.
@@ -41,6 +42,8 @@ export function FxAppShell({ children }: { children: React.ReactNode }) {
       <DesktopTopBar />
       <div className="relative z-10 flex-1 pb-28 lg:pb-0">{children}</div>
       <PhoneTabBar />
+      <ProactiveRunner />
+      <StartVoiceBanner />
     </EffectLevelProvider>
   );
 }

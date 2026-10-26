@@ -12,8 +12,8 @@ const bodySchema = z.object({
 });
 
 /**
- * Yazılı (ve Faz 4'te sesli) sohbet. Sohbet veri değiştirmez; istisnalar: mesajlar, hafıza notları
- * ve Mert'in "yaptım" dediği günlük rutin maddelerinin işaretlenmesi (geri alınabilir).
+ * Yazılı ve sesli sohbet. Sohbet veri değiştirmez; istisnalar: mesajlar, hafıza notları, Mert'in
+ * "yaptım" dediği günlük rutin maddeleri ve "yedim" dediği öğün kaydı (kodla yazılır, "geri al" ile silinir).
  */
 export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
@@ -36,6 +36,7 @@ export async function POST(req: Request) {
       marks: result.marks,
       reply: result.reply,
       todo: result.todo,
+      undone: result.undone,
       failure: result.failure ?? null,
     });
   } catch (e) {
