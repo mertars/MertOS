@@ -126,6 +126,8 @@ export const MIGRATIONS: string[][] = [
   ],
   // v2 — Faz 2: mesajlara ek bilgi (ör. "Not aldım" satırının hafıza notu id'si)
   [`ALTER TABLE messages ADD COLUMN meta TEXT`],
+  // v3 — ücretli Gemini anahtarı için günlük çağrı sayacı (maliyet sigortası)
+  [`CREATE TABLE IF NOT EXISTS llm_usage (date TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0)`],
 ];
 
 /**

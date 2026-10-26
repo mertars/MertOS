@@ -20,8 +20,13 @@ export interface LlmRequest {
 
 export type LlmFn = (req: LlmRequest) => Promise<LlmResult>;
 
-/** GEMINI_API_BASE yalnızca yerel uçtan uca testlerde sahte sunucuya yönlendirmek için. */
-const API_BASE = process.env.GEMINI_API_BASE ?? "https://generativelanguage.googleapis.com/v1beta/models";
+const GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+/**
+ * GEMINI_API_BASE yalnızca yerel uçtan uca testlerde sahte sunucuya
+ * yönlendirmek için. Vercel'de (canlı/önizleme) YOK SAYILIR — yanlışlıkla
+ * ayarlansa bile anahtar Google dışında bir adrese gönderilemez.
+ */
+const API_BASE = !process.env.VERCEL && process.env.GEMINI_API_BASE ? process.env.GEMINI_API_BASE : GOOGLE_API_BASE;
 const TIMEOUT_MS = 25_000;
 
 export function isGeminiConfigured(): boolean {

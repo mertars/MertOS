@@ -179,18 +179,20 @@ sayı/etiket (bkz. `lib/notifications/types.ts`).
 
 ## Asistan sohbeti — Gemini anahtarı
 
-Sohbet Google Gemini'nin **ücretsiz katmanını** kullanır; para harcanmaz.
-Not: ücretsiz katmanda gönderilen metinler Google tarafından model
-geliştirmede kullanılabilir. Bu yüzden modele yalnızca kısa özetler
-(bugünün planı, ilgili notlar, son mesajlar) gider.
+Sohbet Google Gemini API'sini **ücretli (faturalandırması açık) bir
+anahtarla** kullanır. Anahtar yalnızca sunucuda (Vercel ortam değişkeni)
+durur, tarayıcıya ve git'e asla gitmez.
 
-1. [aistudio.google.com](https://aistudio.google.com) → Google hesabınla
-   giriş → **Get API key** → **Create API key** → kopyala.
-2. Vercel → Settings → Environment Variables → `GEMINI_API_KEY` →
-   yapıştır → Save → Redeploy.
-3. Kota dolarsa sohbet "Şu an sohbet limitim doldu…" der; Bugün ekranı ve
-   rutinler etkilenmez. Güncel limitler AI Studio'da proje sayfasında
-   görünür.
+Maliyet korumaları:
+- Uygulama içi günlük sınır: `LLM_GUNLUK_SINIR` (varsayılan 200 çağrı/gün).
+  Aşılınca sohbet "limitim doldu" der, Google'a istek gitmez.
+- Google tarafında: AI Studio → proje → **harcama sınırı (spend cap)** koy;
+  Google Cloud → Billing → **Budgets & alerts** ile e-posta uyarısı kur.
+- Google Cloud → APIs & Services → Credentials → anahtar → **API
+  restrictions** → yalnızca "Generative Language API".
+
+Kurulum: Vercel → Settings → Environment Variables → `GEMINI_API_KEY`
+(isteğe bağlı `LLM_GUNLUK_SINIR`) → Save → Redeploy.
 
 Senaryo seti (cevap kalitesi ölçümü): `GEMINI_API_KEY=… npm run senaryo`
 → `scenarios/sonuclar/` altına bir tablo yazar.

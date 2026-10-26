@@ -458,7 +458,10 @@ Asistan projesi bunun yerini aldı.)
 Kaynak: Mert'in "MertOS Asistan — Claude Code Görev Dosyası" (sohbet
 geçmişinde tam metin). Ana ilke: **%80 deterministik kod, %20 LLM**;
 sohbet veri değiştirmez (istisnalar: hafıza notu sil/düzelt, günlük
-"yapıldı" kaydı). LLM: Gemini ücretsiz katman (Faz 2). Para harcanmaz.
+"yapıldı" kaydı). LLM: Gemini — Mert'in kararıyla **ücretli (faturalı) anahtar** (görev
+dosyasındaki "ücretsiz katman" ilkesinin yerini aldı). Maliyet sigortası:
+`lib/server/usage-guard.ts` (`LLM_GUNLUK_SINIR`, varsayılan 200 çağrı/gün,
+`llm_usage` tablosu) + Google tarafında harcama sınırı.
 
 Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza (kod ✅, senaryo turu bekliyor) ·
 3) yeni tasarım + Hafızam · 4) ses + proaktif konuşma · 5) GitHub proje
@@ -570,3 +573,6 @@ okuyucu. Her faz sonunda Mert onayı.
   Kalite: `scenarios/` (28 senaryo, gerçek Gemini, `npm run senaryo`,
   sonuç tablosu `scenarios/sonuclar/`). `GEMINI_API_BASE` yalnızca yerel
   uçtan uca testte sahte sunucu için.
+- Anahtar güvenliği: `GEMINI_API_KEY` yalnızca `lib/server/gemini.ts`
+  (server-only) okur, `x-goog-api-key` başlığında gider (URL'de değil).
+  `GEMINI_API_BASE` Vercel'de yok sayılır. Testi: `lib/server/gemini.test.ts`.
