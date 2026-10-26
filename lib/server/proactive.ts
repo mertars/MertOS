@@ -1,7 +1,7 @@
 import type { Client } from "@libsql/client";
 import { checkOutput } from "@/lib/assistant/output-check";
 import { buildProactivePrompt, MAX_OUTPUT_TOKENS } from "@/lib/assistant/persona";
-import { buildProactiveFacts, dueSlot, fallbackProactiveText, slotTone, type ProactiveSlot } from "@/lib/assistant/proactive";
+import { buildProactiveFacts, CODE_ONLY_SLOTS, dueSlot, fallbackProactiveText, slotTone, type ProactiveSlot } from "@/lib/assistant/proactive";
 import { addDays, istanbulNow } from "@/lib/assistant/time";
 import { getDailyBrief, getSettings, listMealLog, listMeals } from "./assistant-repo";
 import { addMessage, createConversation, getConversation, latestConversation, type ChatMessage } from "./chat-repo";
@@ -41,13 +41,16 @@ export async function handleProactive(deps: ChatDeps, slot: ProactiveSlot, conve
 
   const [settings, mealLog, meals] = await Promise.all([getSettings(db), listMealLog(db, addDays(now.date, -60), now.date), listMeals(db)]);
   const facts = buildProactiveFacts(slot, brief, mealLog);
-  const res = await llm({
-    models: modelsFrom(settings).chat,
-    system: buildProactivePrompt({ hitap: settings.hitap, tone: slotTone(slot), facts }),
-    contents: [{ role: "user", text: "(Program saati geldi — şimdi kendiliğinden, kısaca konuş.)" }],
-    // Ses cevabından biraz geniş: düşünme token'ları da bu sınırdan yiyor (gemini.ts) ve yarım cümle istemiyoruz.
-    maxOutputTokens: MAX_OUTPUT_TOKENS.ses + 200,
-  });
+  // Ders/sınav anları tamamen koddan: saat ve derslik modelden geçmez (Bölüm 18 gizlilik).
+  const res: Awaited<ReturnType<typeof llm>> = CODE_ONLY_SLOTS.includes(slot)
+    ? { ok: false, reason: "hata", detail: "kod" }
+    : await llm({
+        models: modelsFrom(settings).chat,
+        system: buildProactivePrompt({ hitap: settings.hitap, tone: slotTone(slot), facts }),
+        contents: [{ role: "user", text: "(Program saati geldi — şimdi kendiliğinden, kısaca konuş.)" }],
+        // Ses cevabından biraz geniş: düşünme token'ları da bu sınırdan yiyor (gemini.ts) ve yarım cümle istemiyoruz.
+        maxOutputTokens: MAX_OUTPUT_TOKENS.ses + 200,
+      });
 
   let text = fallbackProactiveText(slot, brief);
   let via: "model" | "kod" = "kod";

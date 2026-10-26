@@ -34,6 +34,12 @@ export interface AssistantSettings {
   sesliOkuma: boolean;
   /** Program saatlerinde asistan kendiliğinden konuşsun (uygulama açıkken). */
   proaktif: boolean;
+  /** Ders/sınav (Bölüm 18): 1 çalışma bloğu kaç dakika */
+  blokDk: number;
+  /** Günlük toplam çalışma bloğu üst sınırı (plan bunu geçmez) */
+  gunlukBlok: number;
+  /** Sınav haftasında da ders hatırlatması yapılsın mı (varsayılan kapalı) */
+  sinavHaftasiDers: boolean;
   modelChat: string;
   modelLight: string;
 }
@@ -45,6 +51,9 @@ export const DEFAULT_SETTINGS: AssistantSettings = {
   ses: "tarayici",
   sesliOkuma: true,
   proaktif: true,
+  blokDk: 50,
+  gunlukBlok: 8,
+  sinavHaftasiDers: false,
   modelChat: DEFAULT_MODELS.chat,
   modelLight: DEFAULT_MODELS.light,
 };

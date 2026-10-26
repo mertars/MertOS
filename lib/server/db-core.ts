@@ -1,4 +1,5 @@
 import type { Client } from "@libsql/client";
+import { CLASS_SESSIONS, COURSES, EXAMS } from "@/data/assistant/courses";
 import { DEFAULT_CHORES, DEFAULT_SCHEDULE, RECIPES } from "@/data/assistant/defaults";
 import { stableHash } from "@/lib/assistant/meals";
 import { FTS_STATEMENTS, MIGRATIONS } from "./schema";
@@ -35,6 +36,7 @@ export async function prepareDatabase(client: Client): Promise<PrepareResult> {
 
   await seedDefaults(client);
   await syncRecipes(client);
+  await syncStudy(client);
   return { version, ftsAvailable };
 }
 
@@ -113,3 +115,41 @@ async function syncRecipes(client: Client) {
   );
 }
 
+
+/**
+ * Ders, ders programı ve sınavlar (Bölüm 18) koddan gelir: `data/assistant/courses.ts`.
+ * İçerik değiştiyse (hash) upsert edilir, listeden çıkan pasife alınır.
+ */
+async function syncStudy(client: Client) {
+  const hash = String(stableHash(JSON.stringify([COURSES, CLASS_SESSIONS, EXAMS])));
+  const current = (await client.execute(`SELECT value FROM settings WHERE key = '_study_hash'`)).rows[0];
+  if (current && current.value === hash) return;
+  const inList = (ids: string[]) => ids.map(() => "?").join(",");
+  await client.batch(
+    [
+      ...COURSES.map((c) => ({
+        sql: `INSERT INTO courses (id, name, aliases, active) VALUES (?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET name = excluded.name, aliases = excluded.aliases, active = 1`,
+        args: [c.id, c.name, JSON.stringify(c.aliases)],
+      })),
+      ...CLASS_SESSIONS.map((s) => ({
+        sql: `INSERT INTO class_sessions (id, course_id, weekday, start, end, active) VALUES (?, ?, ?, ?, ?, 1)
+              ON CONFLICT(id) DO UPDATE SET course_id = excluded.course_id, weekday = excluded.weekday, start = excluded.start, end = excluded.end, active = 1`,
+        args: [s.id, s.courseId, s.weekday, s.start, s.end],
+      })),
+      ...EXAMS.map((e) => ({
+        sql: `INSERT INTO exams (id, course_id, kind, date, time, weight, rooms, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+              ON CONFLICT(id) DO UPDATE SET course_id = excluded.course_id, kind = excluded.kind, date = excluded.date, time = excluded.time,
+                weight = excluded.weight, rooms = excluded.rooms, active = 1`,
+        args: [e.id, e.courseId, e.kind, e.date, e.time, e.weight, e.rooms],
+      })),
+      { sql: `UPDATE courses SET active = 0 WHERE id NOT IN (${inList(COURSES.map((c) => c.id))})`, args: COURSES.map((c) => c.id) },
+      { sql: `UPDATE class_sessions SET active = 0 WHERE id NOT IN (${inList(CLASS_SESSIONS.map((c) => c.id))})`, args: CLASS_SESSIONS.map((c) => c.id) },
+      { sql: `UPDATE exams SET active = 0 WHERE id NOT IN (${inList(EXAMS.map((c) => c.id))})`, args: EXAMS.map((c) => c.id) },
+      {
+        sql: `INSERT INTO settings (key, value, updated_at) VALUES ('_study_hash', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        args: [hash, new Date().toISOString()],
+      },
+    ],
+    "write",
+  );
+}

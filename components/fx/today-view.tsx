@@ -6,7 +6,7 @@ import type { DailyBrief } from "@/lib/assistant/daily";
 import { useBrief, visibleBrief } from "@/lib/assistant/use-brief";
 import { Notice, StatTile } from "./bits";
 import { MicOrb } from "./mic-orb";
-import { ChoresCard, DecisionCard, MealsCard, MemoryTeaser, ProgramCard, RoutineRingCard, SportCard, TodoCard } from "./today-cards";
+import { ChoresCard, DecisionCard, MealsCard, MemoryTeaser, ProgramCard, RoutineRingCard, SportCard, StudyMiniCard, TodoCard } from "./today-cards";
 
 // Telefon — Bugün sekmesi (Faz 3). Kompozisyon: geniş karar kartı; geniş-dar
 // (uzun program + rutin halkası/spor); 3x1 haftalık şerit; geniş-dar (öğün +
@@ -59,6 +59,11 @@ export function TodayView() {
           <div className="mb-3">
             <DecisionCard brief={brief} />
           </div>
+          {brief.study && (
+            <div className="mb-3">
+              <StudyMiniCard brief={brief} />
+            </div>
+          )}
           <div className="mb-3 grid grid-cols-[1.35fr_1fr] gap-3">
             <ProgramCard brief={brief} onToggle={toggleRoutine} readOnly={readOnly} compact className="row-span-2" />
             <RoutineRingCard brief={brief} />

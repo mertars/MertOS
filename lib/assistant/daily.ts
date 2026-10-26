@@ -1,4 +1,5 @@
 import { suggestDayMeals, MEAL_TYPE_LABELS, type MealSuggestion } from "./meals";
+import type { StudyDay } from "./study";
 import { addDays, daysBetween, isoWeekNumber, isoWeekday, weekdayName, weekStart } from "./time";
 import type { Chore, DayType, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem, TodoItem } from "./types";
 
@@ -177,6 +178,8 @@ export interface DailyBrief {
   projects: { status: "bagli-degil" };
   /** Bugünün yapılacakları (tabloya v4'te eklendi — eski önbellekte olmayabilir) */
   todos: TodoItem[];
+  /** Ders ve sınav (Bölüm 18; sunucu doldurur — eski önbellekte olmayabilir) */
+  study?: StudyDay;
   decision: string;
   week: WeeklyConsistency;
   generatedAt: string;

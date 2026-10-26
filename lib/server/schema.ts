@@ -154,6 +154,65 @@ export const MIGRATIONS: string[][] = [
       PRIMARY KEY (date, slot)
     )`,
   ],
+  // v6 — Bölüm 18 ders ve sınav takibi. courses/class_sessions/exams koddan
+  // (data/assistant/courses.ts) senkronlanır; diğerleri Mert'in kayıtları.
+  [
+    `CREATE TABLE IF NOT EXISTS courses (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      aliases TEXT NOT NULL DEFAULT '[]',
+      active INTEGER NOT NULL DEFAULT 1
+    )`,
+    `CREATE TABLE IF NOT EXISTS class_sessions (
+      id TEXT PRIMARY KEY,
+      course_id TEXT NOT NULL,
+      weekday INTEGER NOT NULL,
+      start TEXT NOT NULL,
+      end TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
+    )`,
+    `CREATE TABLE IF NOT EXISTS exams (
+      id TEXT PRIMARY KEY,
+      course_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time TEXT NOT NULL,
+      weight INTEGER NOT NULL,
+      rooms TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
+    )`,
+    `CREATE TABLE IF NOT EXISTS study_blocks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      course_id TEXT NOT NULL,
+      blocks INTEGER NOT NULL,
+      note TEXT,
+      source TEXT NOT NULL DEFAULT 'ekran',
+      created_at TEXT NOT NULL,
+      deleted_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS study_blocks_date ON study_blocks(date)`,
+    `CREATE TABLE IF NOT EXISTS readiness (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS class_attendance (
+      date TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (date, session_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS course_topics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      course_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sort INTEGER NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0
+    )`,
+  ],
 ];
 
 /**
@@ -180,4 +239,8 @@ export const BACKUP_TABLES = [
   "projects",
   "project_state",
   "todos",
+  "study_blocks",
+  "readiness",
+  "class_attendance",
+  "course_topics",
 ] as const;

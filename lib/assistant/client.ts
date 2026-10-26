@@ -106,7 +106,7 @@ export function fetchAssistantSettings() {
   return request<AssistantSettings>("/api/assistant/settings");
 }
 
-export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "arka" | "ses" | "sesliOkuma" | "proaktif">>) {
+export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "arka" | "ses" | "sesliOkuma" | "proaktif" | "blokDk" | "gunlukBlok" | "sinavHaftasiDers">>) {
   return request<AssistantSettings>("/api/assistant/settings", { method: "PATCH", body: JSON.stringify(patch) });
 }
 
@@ -215,4 +215,48 @@ export function requestProactive(slot: string, conversationId: string | null) {
     method: "POST",
     body: JSON.stringify({ slot, conversationId }),
   });
+}
+
+// --- Ders ve sınav (Bölüm 18) -------------------------------------------------
+
+export type StudyOverviewClient = import("@/lib/server/study-repo").StudyOverview;
+
+export function fetchStudy() {
+  return request<StudyOverviewClient>("/api/assistant/study");
+}
+
+export function addStudyBlocks(entry: { date: string; courseId: string; blocks: number; note?: string | null }) {
+  return request<{ blocks: import("./study").StudyBlock[] }>("/api/assistant/study/blocks", { method: "POST", body: JSON.stringify(entry) });
+}
+
+export function addStudyBlocksBulk(entries: { date: string; courseId: string; blocks: number }[]) {
+  return request<{ blocks: import("./study").StudyBlock[] }>("/api/assistant/study/blocks", { method: "POST", body: JSON.stringify({ entries }) });
+}
+
+export function deleteStudyBlock(id: number) {
+  return request<{ ok: true }>(`/api/assistant/study/blocks/${id}`, { method: "DELETE" });
+}
+
+export function restoreStudyBlock(id: number) {
+  return request<{ ok: true }>(`/api/assistant/study/blocks/${id}`, { method: "PATCH", body: JSON.stringify({ restore: true }) });
+}
+
+export function setStudyReadiness(courseId: string, score: number) {
+  return request<{ ok: true }>("/api/assistant/study/readiness", { method: "POST", body: JSON.stringify({ courseId, score }) });
+}
+
+export function setClassAttendance(sessionId: string, attended: boolean) {
+  return request<{ ok: true }>("/api/assistant/study/attendance", { method: "POST", body: JSON.stringify({ sessionId, attended }) });
+}
+
+export function saveSyllabus(courseId: string, text: string) {
+  return request<{ count: number }>("/api/assistant/study/topics", { method: "PUT", body: JSON.stringify({ courseId, text }) });
+}
+
+export function setTopicDone(id: number, done: boolean) {
+  return request<{ ok: true }>(`/api/assistant/study/topics/${id}`, { method: "PATCH", body: JSON.stringify({ done }) });
+}
+
+export function previewStudyImport(text: string) {
+  return request<{ lines: import("./study").ImportLine[] }>("/api/assistant/study/import", { method: "POST", body: JSON.stringify({ text }) });
 }

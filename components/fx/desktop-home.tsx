@@ -7,7 +7,7 @@ import { AssistantPanel } from "./assistant-panel";
 import { Notice } from "./bits";
 import { CardLabel, GlassCard } from "./glass-card";
 import { HistoryCard, TodaySportTiles, useHealthHistory, WeekCard } from "./health-cards";
-import { DecisionCard, ProgramCard, TodoCard } from "./today-cards";
+import { DecisionCard, ProgramCard, StudyMiniCard, TodoCard } from "./today-cards";
 
 // Bilgisayar ana görünümü (Faz 3): tüm ekran, sayfa kaydırması yok.
 // Sol: sağlık. Orta: büyük mikrofon, altında sohbet. Sağ: günün kararı,
@@ -52,7 +52,8 @@ export function DesktopHome() {
       <div className="flex min-h-0 flex-col gap-4">
         {brief && <DecisionCard brief={brief} large={false} index={2} />}
         {brief && <ProgramCard brief={brief} onToggle={toggleRoutine} readOnly={readOnly} index={3} className="min-h-0 flex-1 overflow-y-auto" />}
-        <ProjectsCard />
+        {brief && <StudyMiniCard brief={brief} index={4} />}
+        <ProjectsCard index={5} />
       </div>
     </div>
   );

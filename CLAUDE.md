@@ -8,7 +8,8 @@ tasarım token'ları ve "sıradaki adımlar" burada.
 
 > **YENİ (Ekim 2026): "MertOS Asistan" projesi başladı** — bkz. § 15. Görev
 > dosyası 5 fazlık; **Faz 1–3 tamam**, **Faz 4 kodu tamam** (ses, planlı
-> konuşma, sesle günlük kayıt — § 15.8; gerçek telefonda deneme Mert'te).
+> konuşma, sesle günlük kayıt — § 15.8; gerçek telefonda deneme Mert'te),
+> **Bölüm 18 Ders ve Sınav kodu tamam** (§ 15.9; sınav tablosu Mert onayında).
 > Bildirimler
 > bu planla KAPATILDI (§ 10 artık tarihsel). Aşağıdaki § 0–14 eski 1./2.
 > aşamayı anlatır ve hâlâ geçerli (eski modüller IndexedDB'de çalışmaya
@@ -470,12 +471,14 @@ dosyasındaki "ücretsiz katman" ilkesinin yerini aldı). Maliyet sigortası:
 Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ✅
 (senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam ✅
 (§ 15.7; Mert onayı sonrası uygulandı) · 4) ses + proaktif
-konuşma ✅ kod (§ 15.8; telefonda deneme Mert'te) · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
+konuşma ✅ kod (§ 15.8; telefonda deneme Mert'te) · Bölüm 18 ders/sınav ✅ kod
+(§ 15.9, Faz 5'ten önce istendi) · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
 kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
 depodaki varsayılan dal — `main` adında dal yok) gönderilir.
 
 **Görev dosyası bölümleri depoda:** `docs/gorev-dosyasi/` (Faz 3 tasarım
-tarifi: `faz-3-tasarim.md` — birebir uygulanır; Faz 4: `faz-4-ses.md`).
+tarifi: `faz-3-tasarim.md` — birebir uygulanır; Faz 4: `faz-4-ses.md`;
+Bölüm 18: `bolum-18-ders-sinav.md`).
 Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
 
 ### 15.8 Ses, planlı konuşma, sesle günlük kayıt (Faz 4) — `docs/gorev-dosyasi/faz-4-ses.md`
@@ -520,6 +523,48 @@ Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
   `voice-log.test.ts` (10 gerçek cümle, sesli yazı biçiminde; ilk deneme 2/10
   yanlış → düzeltildi, 0/10), `gemini.test.ts` (TTS). Gerçek Gemini:
   `scenarios/proaktif.scenario.ts` (sonuç `scenarios/sonuclar/`, depoya girmez).
+
+### 15.9 Ders ve sınav takibi (Bölüm 18) — `docs/gorev-dosyasi/bolum-18-ders-sinav.md`
+
+- **Veri koddan**: `data/assistant/courses.ts` (`COURSES` + kısa yazımlar,
+  `CLASS_SESSIONS` — yalnızca gidilen 3 ders, `EXAMS` — 8 ara sınav, derslik).
+  Açılışta `db-core.ts` `syncStudy` (hash) tablolara yazar; yazım hatası
+  burada düzeltilir. Öğrenci no / kimlik YOK.
+- v6 tabloları: `courses`, `class_sessions`, `exams`, `study_blocks` (yumuşak
+  silme), `readiness` (her güncelleme yeni satır), `class_attendance` ("derse
+  gittim"), `course_topics` (yapıştırılan müfredat). Okuma/yazma:
+  `lib/server/study-repo.ts` (`getStudyOverview`).
+- **Plan KODLA** (`lib/assistant/study.ts` `buildStudyPlan`, saf): ders hedefi
+  `targetBlocks` = 10 × ağırlık/40 × (6−hazırlık)/3 (en az 2; puansız = 3);
+  kalan / sınava kalan gün (sınav yakınsa önce); günlük sınır `gunlukBlok`
+  (vars. 8), sınav günü yarısı, sınav günü o derse çalışılmaz; sığmazsa paylar
+  oranla küçülür (eksik derslere yayılır, hiçbiri sıfırda kalmaz) + dürüst
+  uyarı. Yapılmayan blok ertesi gün kendiliğinden kayar (her gün baştan
+  hesap). Saat vermez → koşu/öğün saatlerine dokunmaz. `examConflicts`
+  (aynı gün <2 saat: 5 Kasım uyarısı, süre uydurmaz), `parseStudyImport`
+  (Notlar'dan "25.10 ayrık 2 blok"; tahmin yok, satır nedeniyle reddedilir),
+  `parseSyllabus`.
+- Ayarlar: `blokDk` (50), `gunlukBlok` (8), `sinavHaftasiDers` (false) —
+  Ders ekranının altındaki "Çalışma ayarları".
+- API: `GET /api/assistant/study`, `POST /study/blocks` (tek ya da
+  `{entries}`), `DELETE|PATCH(restore) /study/blocks/[id]`,
+  `POST /study/readiness`, `POST /study/attendance`, `PUT /study/topics`,
+  `PATCH /study/topics/[id]`, `POST /study/import` (yalnızca önizleme).
+- UI: `/ders` (`components/fx/study-view.tsx`; telefonda 6. alt sekme "Ders",
+  bilgisayarda üst sekme; renk `--fx-ders`): çakışma + plan uyarısı, sıradaki
+  sınav geri sayımı, Bugün (ders + "derse gittim", blok hedefi, +1), blok
+  kaydet (geçmiş tarih), son kayıtlar (sil + geri al), ders kartları
+  (ilerleme, hazırlık 1–5, konu listesi), Notlar'dan aktar, ayarlar. Bugün
+  ekranında `StudyMiniCard`.
+- Asistan: `DailyBrief.study` (`buildStudyDay`). Sohbet bağlamı
+  `describeStudyForModel` — YALNIZCA ders adı, sınav tarih/saati, blok
+  sayıları (derslik yok). Planlı konuşma: sabah mesajına ders + blok hedefi
+  (`studyMorningLine`); `ders` (dersten 30 dk önce, sınav haftasında ayara
+  bağlı), `sinav` (sınav günü 07:30 → ilk sınava kadar; saat + derslik),
+  `sinav-aksam` (önceki akşam 21:30) — bu üçü `CODE_ONLY_SLOTS`, model çağrılmaz.
+- Sesle blok kaydı ("Ayrık matematik 2 blok çalıştım") HENÜZ YOK — görev
+  dosyası "önce ekrandan, ses sonra" diyor.
+- Testler: `lib/assistant/study.test.ts`, `lib/server/study.test.ts`.
 
 ### 15.6 Hafızam (Faz 3)
 

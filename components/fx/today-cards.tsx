@@ -302,3 +302,36 @@ export function TodoCard({
     </GlassCard>
   );
 }
+
+/** Ders ve sınav özeti (Bölüm 18) — bugünün blok hedefi, bugünkü ders/sınav, sıradaki sınav; dokununca Ders sekmesi. */
+export function StudyMiniCard({ brief, index = 2 }: { brief: DailyBrief; index?: number }) {
+  const st = brief.study;
+  if (!st || (!st.nextExam && !st.classes.length && !st.blockTarget)) return null;
+  const line = st.examsToday.length
+    ? `Bugün sınav: ${st.examsToday.map((e) => `${e.time} ${e.name}`).join(" · ")}`
+    : st.classes.length
+      ? `Ders: ${st.classes.map((c) => `${c.start} ${c.name}${c.attended ? " ✓" : ""}`).join(" · ")}`
+      : st.nextExam
+        ? `Sıradaki sınav: ${st.nextExam.name}`
+        : "";
+  return (
+    <Link href="/ders" className="block">
+      <GlassCard accent="--fx-ders" index={index} className="flex items-center gap-4">
+        <Ring value={st.blockTarget ? st.blocksDone / st.blockTarget : 0} color="var(--fx-ders)" size={58} stroke={5}>
+          <span className="fx-num text-[14px]">
+            {st.blocksDone}/{st.blockTarget}
+          </span>
+        </Ring>
+        <div className="min-w-0 flex-1">
+          <CardLabel>Ders · çalışma bloğu</CardLabel>
+          <p className="mt-1 truncate text-[13.5px]">{line}</p>
+          {st.nextExam && !st.examsToday.length && (
+            <p className="fx-num mt-0.5 text-[10.5px] text-[var(--fx-text-3)]">
+              SINAV {st.nextExam.date.slice(8)}.{st.nextExam.date.slice(5, 7)} {st.nextExam.time}
+            </p>
+          )}
+        </div>
+      </GlassCard>
+    </Link>
+  );
+}

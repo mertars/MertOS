@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Brain, CalendarDays, FolderGit2, HeartPulse, MessageCircle } from "lucide-react";
+import { Brain, CalendarDays, FolderGit2, GraduationCap, HeartPulse, MessageCircle } from "lucide-react";
 import { fetchAssistantSettings } from "@/lib/assistant/client";
 import { cn } from "@/lib/utils";
 import { EffectLevelProvider } from "./effect-level";
@@ -10,14 +10,15 @@ import { ProactiveRunner, StartVoiceBanner } from "./proactive";
 import { Wallpaper } from "./wallpaper";
 
 // Faz 3 uygulama kabuğu: efekt seviyesi + hareketli arka plan + gezinme.
-// Telefon: alttaki cam çubukta 5 sekme (Asistan, Bugün, Sağlık, Projeler,
-// Hafızam). Bilgisayar: üstte Asistan / Hafızam / Ayarlar; ana görünüm
+// Telefon: alttaki cam çubukta 6 sekme (Asistan, Bugün, Ders, Sağlık, Projeler,
+// Hafızam). Bilgisayar: üstte Asistan / Ders / Hafızam / Ayarlar; ana görünüm
 // /asistan ve /bugun'da tek ekranlık 3 sütun (components/fx/desktop-home.tsx).
 // Eski modüller (Hub'lar, İstatistik, Ayarlar alt sayfaları) aynı kabukta açılır.
 
 export const PHONE_TABS = [
   { href: "/asistan", label: "Asistan", icon: MessageCircle, color: "--fx-asistan", exact: true },
   { href: "/bugun", label: "Bugün", icon: CalendarDays, color: "--fx-program", exact: false },
+  { href: "/ders", label: "Ders", icon: GraduationCap, color: "--fx-ders", exact: false },
   { href: "/saglik", label: "Sağlık", icon: HeartPulse, color: "--fx-saglik", exact: false },
   { href: "/projeler", label: "Projeler", icon: FolderGit2, color: "--fx-proje", exact: false },
   { href: "/asistan/hafizam", label: "Hafızam", icon: Brain, color: "--fx-hafiza", exact: false },
@@ -25,6 +26,7 @@ export const PHONE_TABS = [
 
 export const DESKTOP_TABS = [
   { href: "/asistan", label: "Asistan", color: "--fx-asistan", match: ["/asistan", "/bugun"] },
+  { href: "/ders", label: "Ders", color: "--fx-ders", match: ["/ders"] },
   { href: "/asistan/hafizam", label: "Hafızam", color: "--fx-hafiza", match: ["/asistan/hafizam"] },
   { href: "/ayarlar", label: "Ayarlar", color: "--fx-text", match: ["/ayarlar"] },
 ] as const;

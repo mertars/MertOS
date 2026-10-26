@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, type AssistantSettings } from "@/lib/assistant/config
 import { buildDailyBrief, computeHistory, type DailyBrief, type DayHistory } from "@/lib/assistant/daily";
 import { addDays, weekStart } from "@/lib/assistant/time";
 import type { Chore, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem } from "@/lib/assistant/types";
+import { getStudyOverview } from "./study-repo";
 import { listTodos } from "./todo-repo";
 
 // Asistan tablolarının okuma/yazma fonksiyonları. İstemci (Client) parametre
@@ -206,5 +207,8 @@ export async function getDailyBrief(db: Client, date: string, time: string): Pro
     listRoutineLog(db, from, date),
     listTodos(db, date, date),
   ]);
-  return buildDailyBrief({ date, time, hitap: settings.hitap, schedule, meals, chores, mealLog, routineLog, todos });
+  const brief = buildDailyBrief({ date, time, hitap: settings.hitap, schedule, meals, chores, mealLog, routineLog, todos });
+  // Ders ve sınav (Bölüm 18): bugünkü ders, blok hedefi, bugünün/yarının sınavı.
+  brief.study = (await getStudyOverview(db, { date, time }, settings)).day;
+  return brief;
 }

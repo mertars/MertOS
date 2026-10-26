@@ -12,6 +12,9 @@ const patchSchema = z
     sesliOkuma: z.boolean(),
     proaktif: z.boolean(),
     ses: z.enum(["tarayici", "gemini"]),
+    blokDk: z.number().int().min(15).max(120),
+    gunlukBlok: z.number().int().min(1).max(16),
+    sinavHaftasiDers: z.boolean(),
   })
   .partial();
 

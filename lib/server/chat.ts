@@ -3,6 +3,7 @@ import type { AssistantSettings } from "@/lib/assistant/config";
 import type { DailyBrief } from "@/lib/assistant/daily";
 import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS, routineItemsForDay, scheduleForDay } from "@/lib/assistant/daily";
 import { parseDayReferences } from "@/lib/assistant/day-ref";
+import { describeStudyForModel } from "@/lib/assistant/study";
 import { buildExtractionPrompt, EXTRACTION_RESPONSE_SCHEMA, extractionSchema, filterExtractedNotes, MEMORY_CATEGORY_LABELS } from "@/lib/assistant/memory-extract";
 import { MEAL_TYPE_LABELS } from "@/lib/assistant/meals";
 import { checkOutput } from "@/lib/assistant/output-check";
@@ -115,6 +116,7 @@ export function describeToday(brief: DailyBrief, upcoming: TodoItem[] = []): str
     upcoming.length ? `Yaklaşan yapılacaklar: ${upcoming.map((t) => `${formatTrDate(t.date)} ${weekdayName(isoWeekday(t.date))} ${describeTodo(t)}`).join("; ")}.` : "",
     `Bu hafta: koşu ${w.runs.done}/${w.runs.planned}, yürüyüş ${w.walks.done}/${w.walks.planned}, rutin %${w.routinePct}, öğün kaydı ${w.mealLogs.count}.`,
     `Projeler: GitHub bağlantısı henüz yok — proje durumu bilinmiyor.`,
+    brief.study ? describeStudyForModel(brief.study) : "",
   ]
     .filter(Boolean)
     .join("\n");
