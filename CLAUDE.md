@@ -9,7 +9,8 @@ tasarım token'ları ve "sıradaki adımlar" burada.
 > **YENİ (Ekim 2026): "MertOS Asistan" projesi başladı** — bkz. § 15. Görev
 > dosyası 5 fazlık; **Faz 1–3 tamam**, **Faz 4 kodu tamam** (ses, planlı
 > konuşma, sesle günlük kayıt — § 15.8; gerçek telefonda deneme Mert'te),
-> **Bölüm 18 Ders ve Sınav kodu tamam** (§ 15.9; sınav tablosu Mert onayında).
+> **Bölüm 18 Ders ve Sınav kodu tamam** (§ 15.9; sınav tablosu Mert onayında),
+> **Faz 5 Proje okuyucu kodu tamam** (§ 15.10; gerçek GitHub anahtarıyla deneme Mert'te).
 > Bildirimler
 > bu planla KAPATILDI (§ 10 artık tarihsel). Aşağıdaki § 0–14 eski 1./2.
 > aşamayı anlatır ve hâlâ geçerli (eski modüller IndexedDB'de çalışmaya
@@ -472,13 +473,13 @@ Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ✅
 (senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam ✅
 (§ 15.7; Mert onayı sonrası uygulandı) · 4) ses + proaktif
 konuşma ✅ kod (§ 15.8; telefonda deneme Mert'te) · Bölüm 18 ders/sınav ✅ kod
-(§ 15.9, Faz 5'ten önce istendi) · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
+(§ 15.9, Faz 5'ten önce istendi) · 5) GitHub proje okuyucu ✅ kod (§ 15.10). Her faz sonunda Mert onayı. Mert'in
 kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
 depodaki varsayılan dal — `main` adında dal yok) gönderilir.
 
 **Görev dosyası bölümleri depoda:** `docs/gorev-dosyasi/` (Faz 3 tasarım
 tarifi: `faz-3-tasarim.md` — birebir uygulanır; Faz 4: `faz-4-ses.md`;
-Bölüm 18: `bolum-18-ders-sinav.md`).
+Bölüm 18: `bolum-18-ders-sinav.md`; Faz 5: `faz-5-projeler.md`).
 Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
 
 ### 15.8 Ses, planlı konuşma, sesle günlük kayıt (Faz 4) — `docs/gorev-dosyasi/faz-4-ses.md`
@@ -569,6 +570,44 @@ Diğer fazların metni Mert yapıştırdıkça buraya eklenir.
   al" siler); biri eksikse tek soru (`meta.pending.kind="calisma"`,
   `resolveStudyPending`). Yalnızca bugün/dün; ders dışı "işte çalıştım" yazılmaz.
 - Testler: `lib/assistant/study.test.ts`, `lib/server/study.test.ts`.
+
+### 15.10 Proje durumu okuyucu (Faz 5) — `docs/gorev-dosyasi/faz-5-projeler.md`
+
+- **YALNIZCA OKUR** (`lib/server/github.ts`, yalnızca GET). Anahtar: `GITHUB_TOKEN`
+  (Vercel env; fine-grained, seçili depolar, salt okunur: Contents, Metadata,
+  Pull requests, Commit statuses, Checks) — istemciye gitmez. `GITHUB_API_BASE`
+  yalnızca yerel sahte-GitHub testi için (Vercel'de yok sayılır). `User-Agent`
+  başlığı ZORUNLU (yoksa GitHub 403 verir). Kurulum adımları Projeler ekranında.
+- Okunan: ana dalda `tasks.json` (`parseTasks`, toleranslı: dizi/{tasks}, durumlar
+  bitti/devam/bekliyor; yalnızca BAŞLIK+DURUM saklanır) ve `PROJECT_STATE.md`
+  (yalnızca başlıklar, yalnızca ekranda), son 5 commit (yalnızca ekranda), ana
+  dala girmemiş dallar (`compare` ile ahead>0 ya da PR'lı; en çok 10) + PR + test
+  durumu (`ciState`: kaldı > bekliyor > geçti; `status` + `check-runs`).
+  Ortak saf ayrıştırıcılar `scripts/proje-ayristir.mjs` (Node modülü YOK —
+  tarayıcı paketine girebilir); `scripts/proje-ozeti.mjs` Mac komutu.
+- Depolama (yeni tablo yok): `projects` (id = "kullanici/depo", `tracked`),
+  `project_state` (source `github` | `yerel`; `_repos` = depo listesi).
+  `projects-store.ts` ağa HİÇ gitmez (günlük özet/sohbet bağlamı bunu kullanır);
+  `projects-repo.ts` tazeler: önbellek 15 dk, elle "Yenile" 60 sn'de bir, arka
+  planda otomatik çalışan YOK. GitHub'a ulaşılamazsa eski durum kalır
+  (`lastError`, ekranda "eski"); 401/403/limit/ağ hatasında kalan depolara gidilmez.
+- API: `GET /api/assistant/projects` (`?yenile=1`, `?depolar=1`), `PATCH` (izle/bırak).
+  UI: `components/fx/projects-view.tsx` (`/projeler`): anahtar kurulum adımları,
+  bir kez gösterilen uyarı (git status/yerel iş GitHub'da yok; site ele geçerse
+  okunabilir), depo seçimi tek dokunuş, proje kartı (bekleyen iş, testte dal, ana
+  dal testi, kaynak etiketleri GitHub/Yerel + tarih), masaüstü `ProjectsCard`.
+- Asistan: `DailyBrief.projects` (`buildProjectsBrief`), sohbet bağlamı
+  `describeProjectsForModel` — YALNIZCA görev başlığı/durum, dal adı, PR başlığı,
+  test durumu, tarih (commit mesajı, PROJECT_STATE, kod ASLA); proje kelimesi geçen
+  mesajda önbellek eskiyse bir kez tazelenir (8 sn sınırlı). Persona "Projeler":
+  "GitHub'daki son duruma göre" + tarih, üç durum ayrımı, yerel işi bilmem.
+  Akşam `proje` konuşması gerçek özetten.
+- **Mac betiği** (elle): `node scripts/proje-ozeti.mjs ~/yol/routinix-kampus`
+  (`--dene` yazmaz; `--depo k/d`). tasks.json + PROJECT_STATE.md başlıkları + `git
+  status --short` SAYISI (dosya adı yok) → `project_state` source `yerel`. DB
+  anahtarı `~/.config/mertos/env` (TURSO_DATABASE_URL, TURSO_AUTH_TOKEN) — projede değil.
+- Testler: `lib/server/github.test.ts` (sahte GitHub, CI durumları, önbellek, eski
+  durum, gizlilik).
 
 ### 15.6 Hafızam (Faz 3)
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, FolderKanban, ListChecks, Timer } from "lucide-react";
 import { SectionTitle } from "@/components/fx/bits";
-import { ProjectsCard } from "@/components/fx/desktop-home";
+import { ProjectsPanel } from "@/components/fx/projects-view";
 import { CardLabel, GlassCard } from "@/components/fx/glass-card";
 import { fetchTodos } from "@/lib/assistant/client";
 import { addDays, istanbulNow } from "@/lib/assistant/time";
@@ -12,8 +12,8 @@ import { formatTrDate } from "@/lib/assistant/text";
 import type { TodoItem } from "@/lib/assistant/types";
 import { cn } from "@/lib/utils";
 
-// Projeler sekmesi (Faz 3): GitHub proje okuyucu Faz 5'te. Şimdilik yaklaşan
-// yapılacaklar (7 gün) ve eski üretkenlik modüllerine bağlantılar.
+// Projeler sekmesi (Faz 5): GitHub'dan okunan proje durumu (components/fx/projects-view.tsx),
+// yaklaşan yapılacaklar (7 gün) ve eski üretkenlik modüllerine bağlantılar.
 
 const LINKS = [
   { href: "/hublar/uretkenlik/projeler", label: "Projeler", note: "eski proje listesi", icon: FolderKanban },
@@ -34,9 +34,12 @@ export default function ProjelerPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 pb-10 lg:px-7">
-      <SectionTitle eyebrow="Projeler · Faz 5'te GitHub" title="Projeler" />
+      <SectionTitle eyebrow="GitHub · yalnızca okunur" title="Projeler" />
       <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr] lg:gap-4">
-        <GlassCard accent="--fx-proje" index={1}>
+        <div className="lg:col-start-1 lg:row-start-1">
+          <ProjectsPanel />
+        </div>
+        <GlassCard accent="--fx-proje" index={1} className="lg:col-start-2 lg:row-start-1 lg:self-start">
           <CardLabel>Yaklaşan · 7 gün</CardLabel>
           {todos === null && <div className="mt-3 h-16 animate-pulse rounded-[12px] bg-white/[0.04]" />}
           {todos?.length === 0 && <p className="mt-2 text-[13px] text-[var(--fx-text-3)]">Önümüzdeki 7 gün için yapılacak yok.</p>}
@@ -51,7 +54,6 @@ export default function ProjelerPage() {
             ))}
           </ul>
         </GlassCard>
-        <ProjectsCard index={2} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 lg:mt-4 lg:grid-cols-4 lg:gap-4">
         {LINKS.map((l, i) => {

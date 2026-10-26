@@ -163,7 +163,7 @@ export function buildProactiveFacts(slot: ProactiveSlot, brief: DailyBrief, meal
     const open = todos.filter((t) => !t.done).map((t) => `${t.time ?? "gün içinde"} ${t.title}`);
     lines.push(
       `An: günün kısa özeti (proje özeti saati).`,
-      `Projeler: GitHub bağlantısı henüz yok — proje durumu BİLİNMİYOR, proje hakkında bir şey söyleme, yalnızca bağlanınca burada olacağını söyleyebilirsin.`,
+      projectsFactLine(brief),
       `Bugün rutin ${brief.routine.done}/${brief.routine.total}.`,
       `Yapılacaklar: ${todos.length ? `${todos.length - open.length}/${todos.length} yapıldı${open.length ? `; açık: ${open.join(", ")}` : ""}` : "liste boş"}.`,
     );
@@ -209,9 +209,27 @@ export function fallbackProactiveText(slot: ProactiveSlot, brief: DailyBrief): s
       return `${h}, temizlik vakti: ${brief.chores.map((c) => lowerFirst(c.title)).join(", ")}.`;
     case "proje": {
       const open = (brief.todos ?? []).filter((t) => !t.done).length;
-      return `${h}, günün özeti: rutin ${brief.routine.done}/${brief.routine.total}${open ? `, listede ${open} açık iş var` : ""}. Proje durumu GitHub bağlanınca burada olacak.`;
+      return `${h}, günün özeti: rutin ${brief.routine.done}/${brief.routine.total}${open ? `, listede ${open} açık iş var` : ""}. ${projectsSentence(brief)}`;
     }
   }
+}
+
+const dayLabel = (iso: string | null) => (iso ? formatTrDate(iso.slice(0, 10)) : "?");
+
+/** Proje bölümü, model için gerçek veri satırı (yalnızca ad, sayılar, tarih — başlık/içerik yok). */
+function projectsFactLine(brief: Pick<DailyBrief, "projects">): string {
+  const p = brief.projects;
+  if (!p || p.status === "bagli-degil") return "Projeler: GitHub bağlantısı yok — proje durumu BİLİNMİYOR, proje hakkında bir şey söyleme.";
+  if (p.status === "secim-yok") return "Projeler: izlenen proje seçilmemiş — proje durumu BİLİNMİYOR, proje hakkında bir şey söyleme.";
+  return `Projeler (GitHub'daki son duruma göre; "GitHub'daki son duruma göre" ifadesini kullan): ${p.items
+    .map((i) => `${i.name}: ${i.open} açık iş, ${i.waiting} dal testte bekliyor${i.failed ? `, ${i.failed} dalın testi kaldı` : ""}, ${dayLabel(i.updatedAt)} tarihinde okundu${i.stale ? " (ESKİ — GitHub'a ulaşılamadı)" : ""}`)
+    .join("; ")}.`;
+}
+
+function projectsSentence(brief: Pick<DailyBrief, "projects">): string {
+  const p = brief.projects;
+  if (!p || p.status !== "hazir") return "Proje durumu için GitHub bağlantısı/seçimi Projeler sekmesinde.";
+  return `GitHub'daki son duruma göre: ${p.items.map((i) => `${i.name} ${i.open} açık iş${i.waiting ? `, ${i.waiting} dal testte bekliyor` : ""}${i.failed ? `, ${i.failed} dalın testi kaldı` : ""} (${dayLabel(i.updatedAt)}${i.stale ? ", eski" : ""})`).join("; ")}.`;
 }
 
 /** "11:30 Bilgisayar Ağları — Derslik 11 ve 13; 16:00 Ayrık Matematik — Derslik 1, 7, 8" (koddan; modele gitmez) */

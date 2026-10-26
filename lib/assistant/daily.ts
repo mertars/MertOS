@@ -1,4 +1,5 @@
 import { suggestDayMeals, MEAL_TYPE_LABELS, type MealSuggestion } from "./meals";
+import type { ProjectsBrief } from "./projects";
 import type { StudyDay } from "./study";
 import { addDays, daysBetween, isoWeekNumber, isoWeekday, weekdayName, weekStart } from "./time";
 import type { Chore, DayType, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem, TodoItem } from "./types";
@@ -175,7 +176,8 @@ export interface DailyBrief {
   meals: BriefMeal[];
   chores: TodayChore[];
   choreDone: boolean;
-  projects: { status: "bagli-degil" };
+  /** Proje durumu (Faz 5): GitHub önbelleğinden, kodla */
+  projects: ProjectsBrief;
   /** Bugünün yapılacakları (tabloya v4'te eklendi — eski önbellekte olmayabilir) */
   todos: TodoItem[];
   /** Ders ve sınav (Bölüm 18; sunucu doldurur — eski önbellekte olmayabilir) */
@@ -195,6 +197,7 @@ export interface BriefInput {
   mealLog: MealLogRow[];
   chores: Chore[];
   todos?: TodoItem[];
+  projects?: ProjectsBrief;
   now?: Date;
 }
 
@@ -242,7 +245,7 @@ export function buildDailyBrief(input: BriefInput): DailyBrief {
     meals,
     chores,
     choreDone: doneItems.has("temizlik"),
-    projects: { status: "bagli-degil" },
+    projects: input.projects ?? { status: "bagli-degil", items: [] },
     todos: (input.todos ?? []).filter((t) => t.date === date),
     decision: "",
     week: computeWeeklyConsistency({ date, schedule, routineLog: input.routineLog, mealLog: input.mealLog }),

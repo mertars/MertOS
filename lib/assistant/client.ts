@@ -260,3 +260,26 @@ export function setTopicDone(id: number, done: boolean) {
 export function previewStudyImport(text: string) {
   return request<{ lines: import("./study").ImportLine[] }>("/api/assistant/study/import", { method: "POST", body: JSON.stringify({ text }) });
 }
+
+// --- Projeler (Faz 5) ---------------------------------------------------------
+
+export interface ProjectsResponse {
+  configured: boolean;
+  error: { message: string; code: string } | null;
+  projects: import("./projects").ProjectView[];
+  repos: import("./projects").RepoEntry[];
+  reposFetchedAt: string | null;
+  now: string;
+}
+
+/** `yenile`: elle tazeleme (sunucu 60 sn'de bir izin verir); `depolar`: hesaptaki depo listesini yeniden oku. */
+export function fetchProjects(opts: { yenile?: boolean; depolar?: boolean } = {}) {
+  const q = new URLSearchParams();
+  if (opts.yenile) q.set("yenile", "1");
+  if (opts.depolar) q.set("depolar", "1");
+  return request<ProjectsResponse>(`/api/assistant/projects${q.size ? `?${q}` : ""}`);
+}
+
+export function setProjectTracked(id: string, tracked: boolean) {
+  return request<{ ok: true }>("/api/assistant/projects", { method: "PATCH", body: JSON.stringify({ id, tracked }) });
+}

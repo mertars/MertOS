@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { DailyBrief } from "@/lib/assistant/daily";
 import { CloudOff } from "lucide-react";
 import { useBrief, visibleBrief } from "@/lib/assistant/use-brief";
 import { AssistantPanel } from "./assistant-panel";
@@ -53,20 +54,38 @@ export function DesktopHome() {
         {brief && <DecisionCard brief={brief} large={false} index={2} />}
         {brief && <ProgramCard brief={brief} onToggle={toggleRoutine} readOnly={readOnly} index={3} className="min-h-0 flex-1 overflow-y-auto" />}
         {brief && <StudyMiniCard brief={brief} index={4} />}
-        <ProjectsCard index={5} />
+        <ProjectsCard brief={brief} index={5} />
       </div>
     </div>
   );
 }
 
-export function ProjectsCard({ index = 4 }: { index?: number }) {
+export function ProjectsCard({ brief, index = 4 }: { brief: DailyBrief | null; index?: number }) {
+  const p = brief?.projects;
   return (
     <GlassCard accent="--fx-proje" index={index}>
       <div className="flex items-baseline justify-between">
         <CardLabel>Projeler</CardLabel>
-        <span className="fx-num text-[10.5px] text-[var(--fx-text-3)]">FAZ 5</span>
+        <span className="fx-num text-[10.5px] text-[var(--fx-text-3)]">GITHUB</span>
       </div>
-      <p className="mt-2 text-[13px] leading-snug text-[var(--fx-text-2)]">GitHub projelerinin durumu Faz 5&apos;te burada görünecek.</p>
+      {p?.status === "hazir" ? (
+        <ul className="mt-2 space-y-1.5">
+          {p.items.map((i) => (
+            <li key={i.id} className="flex items-baseline gap-2 text-[13px]">
+              <span className="min-w-0 flex-1 truncate">{i.name}</span>
+              <span className="fx-num text-[10.5px] text-[var(--fx-text-3)]">
+                {i.open} iş{i.waiting ? ` · ${i.waiting} testte` : ""}
+                {i.failed ? ` · ${i.failed} kaldı` : ""}
+                {i.stale ? " · eski" : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[13px] leading-snug text-[var(--fx-text-2)]">
+          {p?.status === "secim-yok" ? "İzlenecek depoları Projeler sekmesinden seçin." : "GitHub bağlantısı Projeler sekmesinde kurulur."}
+        </p>
+      )}
       <Link href="/projeler" className="mt-3 inline-block text-[12.5px] font-medium text-[color-mix(in_srgb,var(--fx-proje)_80%,white)]">
         Projeler sekmesi →
       </Link>

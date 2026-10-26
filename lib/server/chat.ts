@@ -3,6 +3,7 @@ import type { AssistantSettings } from "@/lib/assistant/config";
 import type { DailyBrief } from "@/lib/assistant/daily";
 import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS, routineItemsForDay, scheduleForDay } from "@/lib/assistant/daily";
 import { parseDayReferences } from "@/lib/assistant/day-ref";
+import { describeProjectsForModel } from "@/lib/assistant/projects";
 import { describeStudyForModel } from "@/lib/assistant/study";
 import { buildExtractionPrompt, EXTRACTION_RESPONSE_SCHEMA, extractionSchema, filterExtractedNotes, MEMORY_CATEGORY_LABELS } from "@/lib/assistant/memory-extract";
 import { MEAL_TYPE_LABELS } from "@/lib/assistant/meals";
@@ -37,6 +38,7 @@ import {
 import { contentWords, formatTrDate, normalizeTr } from "@/lib/assistant/text";
 import { addDays, isoWeekday, istanbulNow, weekdayName } from "@/lib/assistant/time";
 import type { MealLogRow, RoutineItem, RoutineLogRow, TodoItem } from "@/lib/assistant/types";
+import { getProjectViews } from "./projects-store";
 import { addBlocks, deleteBlock, listCourses } from "./study-repo";
 import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog, listSchedule, setRoutineDone } from "./assistant-repo";
 import {
@@ -94,7 +96,7 @@ function describeTodo(t: TodoItem): string {
 }
 
 /** `upcoming`: yarından itibaren ~1 haftalık yapılacaklar (Mert "yarın ne var?" diyebilir). */
-export function describeToday(brief: DailyBrief, upcoming: TodoItem[] = []): string {
+export function describeToday(brief: DailyBrief, upcoming: TodoItem[] = [], projectsText = "Projeler: GitHub bağlantısı yok ya da proje seçilmemiş — proje durumu bilinmiyor."): string {
   const done = brief.schedule.filter((s) => s.done).map((s) => s.title);
   const pending = brief.schedule.filter((s) => s.done === false && s.time <= brief.time).map((s) => `${s.time} ${s.title}`);
   const meals = brief.meals
@@ -119,7 +121,7 @@ export function describeToday(brief: DailyBrief, upcoming: TodoItem[] = []): str
     `Yapılacaklar listesi (bugün): ${brief.todos?.length ? brief.todos.map(describeTodo).join("; ") : "boş"}.`,
     upcoming.length ? `Yaklaşan yapılacaklar: ${upcoming.map((t) => `${formatTrDate(t.date)} ${weekdayName(isoWeekday(t.date))} ${describeTodo(t)}`).join("; ")}.` : "",
     `Bu hafta: koşu ${w.runs.done}/${w.runs.planned}, yürüyüş ${w.walks.done}/${w.walks.planned}, rutin %${w.routinePct}, öğün kaydı ${w.mealLogs.count}.`,
-    `Projeler: GitHub bağlantısı henüz yok — proje durumu bilinmiyor.`,
+    projectsText,
     brief.study ? describeStudyForModel(brief.study) : "",
   ]
     .filter(Boolean)
@@ -258,6 +260,27 @@ async function addMarkLine(
       ...(p.mealLogId ? { mealLogId: p.mealLogId } : {}),
     },
   });
+}
+
+const PROJECT_WORDS = /\b(?:proje\w*|routinix\w*|kampus\w*|repo\w*|github\w*|dal(?:da|lar\w*)?|pr|test(?:te|ler\w*)?|commit\w*|gorev\w*|tasks?)\b/;
+
+/**
+ * Proje bölümü (Faz 5): YALNIZCA görev başlıkları, durumlar, dal adları ve test durumu (projects.ts
+ * describeProjectsForModel). Mesaj proje hakkındaysa ve önbellek 15 dk'dan eskiyse GitHub'dan bir
+ * kez tazelenir (8 sn sınırlı); ulaşılamazsa son kaydedilen durum "eski" diye söylenir.
+ */
+async function projectsContext(db: Client, message: string): Promise<string> {
+  if (process.env.GITHUB_TOKEN && PROJECT_WORDS.test(normalizeTr(message))) {
+    try {
+      const { refreshTracked } = await import("./projects-repo");
+      const { realGhFetch } = await import("./github");
+      await Promise.race([refreshTracked(db, realGhFetch()), new Promise((r) => setTimeout(r, 8000))]);
+    } catch {
+      // GitHub'a ulaşılamadı: aşağıda eski durum "ESKİ" işaretiyle gelir
+    }
+  }
+  const views = await getProjectViews(db);
+  return process.env.GITHUB_TOKEN || views.length ? describeProjectsForModel(views) : "Projeler: GitHub bağlantısı henüz kurulmadı — proje durumu bilinmiyor.";
 }
 
 async function studyCtx(db: Client) {
@@ -497,7 +520,7 @@ export async function handleChat(
     listMeals(db),
   ]);
 
-  const today = describeToday(brief, upcoming);
+  const today = describeToday(brief, upcoming, await projectsContext(db, input.message));
   const system = buildSystemPrompt({
     hitap: settings.hitap,
     tone: pickTone(now.time, input.message),
