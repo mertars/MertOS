@@ -133,6 +133,18 @@ function clauses(message: string): { text: string; question: boolean }[] {
   return out;
 }
 
+const ANY_PAST = new RegExp(`${PAST}\\b|${PAST_PERFECT}\\b|\\b(?:bitti|tamamlandi|yapildi|tamamdir|tamam)\\b`);
+
+/**
+ * "Yaptım" diyen yan cümleler (normalize edilmiş) — olumsuz, gelecek ve soru
+ * olanlar hariç. Yapılacaklar listesindeki bir maddeyi sohbetten kapatmak için.
+ */
+export function doneClauses(message: string): string[] {
+  return clauses(message)
+    .filter((c) => !c.question && !NEGATIVE.test(c.text) && !NOT_DONE.test(c.text) && ANY_PAST.test(c.text))
+    .map((c) => c.text);
+}
+
 function mentionedItems(text: string): RoutineItem[] {
   return (Object.keys(RULES) as RoutineItem[]).filter((item) => RULES[item].stem.test(text));
 }

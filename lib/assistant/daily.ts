@@ -1,6 +1,6 @@
 import { suggestDayMeals, MEAL_TYPE_LABELS, type MealSuggestion } from "./meals";
 import { addDays, daysBetween, isoWeekNumber, isoWeekday, weekdayName, weekStart } from "./time";
-import type { Chore, DayType, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem } from "./types";
+import type { Chore, DayType, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem, TodoItem } from "./types";
 
 // Günlük motor — tamamen deterministik, LLM'siz. `getDailyBrief` (sunucu)
 // veritabanından satırları okuyup `buildDailyBrief`'e verir. Görev dosyası § 5.
@@ -148,6 +148,8 @@ export interface DailyBrief {
   chores: TodayChore[];
   choreDone: boolean;
   projects: { status: "bagli-degil" };
+  /** Bugünün yapılacakları (tabloya v4'te eklendi — eski önbellekte olmayabilir) */
+  todos: TodoItem[];
   decision: string;
   week: WeeklyConsistency;
   generatedAt: string;
@@ -162,6 +164,7 @@ export interface BriefInput {
   meals: Meal[];
   mealLog: MealLogRow[];
   chores: Chore[];
+  todos?: TodoItem[];
   now?: Date;
 }
 
@@ -210,6 +213,7 @@ export function buildDailyBrief(input: BriefInput): DailyBrief {
     chores,
     choreDone: doneItems.has("temizlik"),
     projects: { status: "bagli-degil" },
+    todos: (input.todos ?? []).filter((t) => t.date === date),
     decision: "",
     week: computeWeeklyConsistency({ date, schedule, routineLog: input.routineLog, mealLog: input.mealLog }),
     generatedAt: (input.now ?? new Date()).toISOString(),

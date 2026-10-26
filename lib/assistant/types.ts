@@ -30,6 +30,18 @@ export interface ScheduleItem {
   sort: number;
 }
 
+export interface TodoItem {
+  id: number;
+  title: string;
+  /** YYYY-MM-DD (Türkiye) */
+  date: string;
+  /** HH:MM ya da gün içinde herhangi bir zaman */
+  time: string | null;
+  done: boolean;
+  /** "ekran" | "sohbet" */
+  source: string;
+}
+
 export interface RoutineLogRow {
   date: string;
   item: RoutineItem;

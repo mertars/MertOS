@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       userMessage: result.userMessage,
       marks: result.marks,
       reply: result.reply,
+      todo: result.todo,
       failure: result.failure ?? null,
     });
   } catch (e) {

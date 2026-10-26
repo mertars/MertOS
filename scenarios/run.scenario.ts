@@ -54,9 +54,10 @@ describe("Gemini senaryo seti", () => {
         if (s.history?.length) {
           const c = await createConversation(db);
           conversationId = c.id;
-          for (const text of s.history) {
-            await addMessage(db, { conversationId, role: "user", content: text, mode: "yazi" });
-            await addMessage(db, { conversationId, role: "assistant", content: "Anladım.", mode: "yazi" });
+          for (const h of s.history) {
+            const turn = typeof h === "string" ? { user: h, assistant: "Anladım." } : h;
+            await addMessage(db, { conversationId, role: "user", content: turn.user, mode: "yazi" });
+            await addMessage(db, { conversationId, role: "assistant", content: turn.assistant, mode: "yazi" });
           }
         }
 
@@ -71,6 +72,7 @@ describe("Gemini senaryo seti", () => {
         if (s.mode === "ses" && splitSentences(reply).length > 3) notes.push("ses: 3 cümleden uzun");
         if (r.regenerated) notes.push("1 kez yeniden üretildi");
         if (r.marks) notes.push(`✓ ${r.marks.content}`);
+        if (r.todo) notes.push(`+ ${r.todo.content}`);
         if (!s.forbid?.includes("bugün ekran") && norm.includes("bugun ekran")) notes.push("'Bugün ekranı' hatırlatması");
         const hitapOk = !hasWrongHitap(reply, hitap);
         const fabricated = r.problems.filter((p) => !p.startsWith("Hitap")).length > 0;

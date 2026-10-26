@@ -10,8 +10,8 @@ export interface Scenario {
   time: string;
   mode: ChatMode;
   message: string;
-  /** Önceki mesajlar (uzun sohbet senaryosu için) */
-  history?: string[];
+  /** Önceki mesajlar: düz metin = Mert (asistan "Anladım." der), nesne = Mert + asistanın gerçek cevabı */
+  history?: (string | { user: string; assistant: string })[];
   hitap?: string;
   /** Cevapta bunlardan en az biri geçmeli (normalize edilmiş, küçük harf karşılaştırma) */
   expectAny?: string[];
@@ -37,7 +37,7 @@ export const SCENARIOS: Scenario[] = [
   { id: 10, title: "Sabah selamı (koç)", time: "06:20", mode: "ses", message: "Günaydın.", tone: "koc", expectAny: ["koşu", "6,5", "duş"] },
   { id: 11, title: "Akşam yemeği (arkadaş)", time: "20:30", mode: "yazi", message: "Akşam ne yesem?", tone: "arkadas", forbid: RED_MEAT },
   { id: 12, title: "Kırmızı et isteği", time: "19:00", mode: "yazi", message: "Bu akşam canım biraz kırmızı et çekti, ne dersin?", tone: "arkadas" },
-  { id: 13, title: "Sağlık sınırı (diz ağrısı)", time: "07:00", mode: "yazi", message: "Dizim ağrıyor, koşuyu bıraksam mı?", expectAny: ["doktor", "uzman", "hekim"] },
+  { id: 13, title: "Sağlık: diz ağrısı → tavsiye", time: "07:00", mode: "yazi", message: "Dizim ağrıyor, koşuyu bıraksam mı?", expectAny: ["buz", "dinlen", "esne", "yürü"], forbid: ["doktor"] },
   { id: 14, title: "Program değiştirme isteği", time: "09:00", mode: "yazi", message: "Programı değiştir, artık her gün 10 km koşayım.", expectAny: ["değiştiremem", "değiştir", "program"] },
   { id: 15, title: "Hitap değişimi", time: "12:00", mode: "yazi", message: "Selam, nasılsın?", hitap: "Kaptan" },
   { id: 16, title: "Gün tipi sorusu", time: "08:00", mode: "ses", message: "Bugün ne günü, koşu mu yürüyüş mü?", expectAny: ["koşu"] },
@@ -62,5 +62,24 @@ export const SCENARIOS: Scenario[] = [
   { id: 27, title: "Geçen salı ne yaptım", time: "12:00", mode: "yazi", message: "Geçen salı koştum mu?", expectAny: ["yürüyüş", "yürü"] },
   { id: 29, title: "Toplu 'yaptım'", time: "06:40", mode: "yazi", message: "Hidrasyonu yaptım, su içtim, soğuk duş da aldım.", expectAny: ["işaretledim"], forbid: ["bugün ekran"] },
   { id: 30, title: "Kısmi: 'ama yapmadım'", time: "08:30", mode: "yazi", message: "Koştum ama duş almadım, su da kesti.", expectAny: ["işaretledim", "duş"], forbid: ["bugün ekran"] },
+  {
+    id: 31,
+    title: "Öneri kabul → saat sorusu",
+    time: "20:00",
+    mode: "yazi",
+    history: [{ user: "Bugün koşmadım.", assistant: "Tamam Mert Bey, olur böyle günler. Akşam 20 dakikalık hafif bir yürüyüş ister misiniz?" }],
+    message: "Olur.",
+    expectAny: ["kaçta", "saat", "ne zaman"],
+  },
+  {
+    id: 32,
+    title: "Öneri kabul + saat → listeye ekle",
+    time: "20:00",
+    mode: "yazi",
+    history: [{ user: "Bugün koşmadım.", assistant: "Tamam Mert Bey, olur böyle günler. Akşam 20 dakikalık hafif bir yürüyüş ister misiniz?" }],
+    message: "Olur, 21:00'de yaparım.",
+    expectAny: ["ekledim"],
+  },
+  { id: 33, title: "Sağlık: bel ağrısı", time: "21:00", mode: "yazi", message: "Belim tutuldu, yarınki yürüyüşü yapayım mı?", expectAny: ["sıcak", "esne", "hafif", "dinlen"], forbid: ["doktor"] },
   { id: 28, title: "Nabız sorusu", time: "08:00", mode: "yazi", message: "Koşuda nabzım 175'e çıktı, normal mi?", expectAny: ["155", "160", "doktor"] },
 ];

@@ -2,7 +2,7 @@
 
 import type { AssistantSettings } from "./config";
 import type { DailyBrief } from "./daily";
-import type { MealType, RoutineItem } from "./types";
+import type { MealType, RoutineItem, TodoItem } from "./types";
 
 // İstemci tarafı: asistan API'lerine istekler + son günlük özetin telefonda
 // saklanması (§ 16.2 — koşuda bağlantı zayıfsa son özet gösterilir).
@@ -63,6 +63,20 @@ export function setRoutine(item: RoutineItem, done: boolean) {
   return request<{ ok: true }>("/api/assistant/routine", { method: "POST", body: JSON.stringify({ item, done }) });
 }
 
+// --- Yapılacaklar --------------------------------------------------------------
+
+export function addTodoItem(title: string, time: string | null) {
+  return request<{ todo: TodoItem }>("/api/assistant/todos", { method: "POST", body: JSON.stringify({ title, time }) });
+}
+
+export function setTodoItemDone(id: number, done: boolean) {
+  return request<{ todo: TodoItem }>(`/api/assistant/todos/${id}`, { method: "PATCH", body: JSON.stringify({ done }) });
+}
+
+export function deleteTodoItem(id: number) {
+  return request<{ ok: true }>(`/api/assistant/todos/${id}`, { method: "DELETE" });
+}
+
 export function logMeal(entry: { mealType: MealType; mealId: string | null; mealName: string; isLeftover: boolean }) {
   return request<{ ok: true; id: number }>("/api/assistant/meal-log", { method: "POST", body: JSON.stringify(entry) });
 }
@@ -92,7 +106,7 @@ export interface ClientChatMessage {
   role: "user" | "assistant" | "not";
   content: string;
   createdAt: string;
-  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; routineUndone?: boolean; system?: boolean } | null;
+  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; todosDone?: number[]; todoId?: number; routineUndone?: boolean; system?: boolean } | null;
 }
 
 const CONVERSATION_KEY = "mertos-sohbet-id";
@@ -120,7 +134,7 @@ export function fetchChat(conversationId: string | null) {
 }
 
 export function sendChat(conversationId: string | null, message: string) {
-  return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; failure: string | null }>("/api/assistant/chat", {
+  return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; todo: ClientChatMessage | null; failure: string | null }>("/api/assistant/chat", {
     method: "POST",
     body: JSON.stringify({ conversationId, message, mode: "yazi" }),
   });
@@ -147,7 +161,7 @@ export function deleteMemoryNote(id: number) {
   return request<{ ok: true }>(`/api/assistant/memories/${id}`, { method: "DELETE" });
 }
 
-/** Sohbetten yapılan rutin işaretlemesini geri al ("İşaretledim" satırı). */
+/** Sohbetteki "İşaretledim" / "Listeye ekledim" satırını geri al. */
 export function undoChatMark(messageId: number) {
   return request<{ message: ClientChatMessage }>(`/api/assistant/chat/marks/${messageId}`, { method: "DELETE" });
 }

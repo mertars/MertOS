@@ -128,6 +128,21 @@ export const MIGRATIONS: string[][] = [
   [`ALTER TABLE messages ADD COLUMN meta TEXT`],
   // v3 — ücretli Gemini anahtarı için günlük çağrı sayacı (maliyet sigortası)
   [`CREATE TABLE IF NOT EXISTS llm_usage (date TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0)`],
+  // v4 — yapılacaklar listesi (Bugün ekranı + sohbetten "olur, akşam 8'de" → ekle)
+  [
+    `CREATE TABLE IF NOT EXISTS todos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time TEXT,
+      done INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'ekran',
+      created_at TEXT NOT NULL,
+      done_at TEXT,
+      deleted_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS todos_date ON todos(date)`,
+  ],
 ];
 
 /**
@@ -153,4 +168,5 @@ export const BACKUP_TABLES = [
   "messages",
   "projects",
   "project_state",
+  "todos",
 ] as const;

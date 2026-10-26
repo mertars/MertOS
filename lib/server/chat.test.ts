@@ -7,8 +7,9 @@ import { DEFAULT_CHORES, DEFAULT_SCHEDULE } from "@/data/assistant/defaults";
 import { buildDailyBrief } from "@/lib/assistant/daily";
 import { QUOTA_MESSAGE } from "@/lib/assistant/persona";
 import { addMealLog, listRoutineLog } from "./assistant-repo";
-import { describeToday, extractMemories, handleChat, undoRoutineMark, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
+import { describeToday, extractMemories, handleChat, undoChatAction, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
 import { listMessages } from "./chat-repo";
+import { listTodos } from "./todo-repo";
 import { prepareDatabase } from "./db-core";
 import type { LlmFn, LlmRequest } from "./gemini";
 import { listActiveMemories, searchMemories } from "./memory-repo";
@@ -120,11 +121,11 @@ describe("sohbetten rutin işaretleme", () => {
     expect(r2.marks).toBeNull();
     expect(again.calls[0].system).toContain("Zaten işaretliydi: Koşu");
 
-    const undone = await undoRoutineMark(db, r.marks!.id);
+    const undone = await undoChatAction(db, r.marks!.id);
     expect(undone?.content).toBe("İşaretleme geri alındı: Soğuk duş, Koşu");
     expect(undone?.meta).toEqual({ routineUndone: true });
     expect((await listRoutineLog(db, "2026-10-26", "2026-10-26")).filter((x) => x.done).map((x) => x.item)).not.toContain("kosu");
-    expect(await undoRoutineMark(db, r.marks!.id)).toBeNull();
+    expect(await undoChatAction(db, r.marks!.id)).toBeNull();
   });
 
   it("asistanın sorusuna 'evet' cevabı sorulan maddeyi işaretler", async () => {
@@ -141,6 +142,49 @@ describe("sohbetten rutin işaretleme", () => {
     const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Yürüdüm", mode: "yazi" });
     expect(r.marks).toBeNull();
     expect(llm.calls[0].system).toContain("Yürüyüş o günün programında yok");
+  });
+});
+
+describe("sohbetten yapılacaklar listesi", () => {
+  const MARKER = "[[YAPILACAK gün=bugün saat=20:00 başlık=20 dk hafif yürüyüş]]";
+
+  it("kabul + saat → listeye eklenir, işaret satırı cevaptan silinir, geri alınabilir", async () => {
+    const llm = fakeLlm([`Süper Mert Bey, bugün 20:00'ye listeye ekledim.\n${MARKER}`]);
+    const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Olur, akşam 8'de yaparım.", mode: "yazi" });
+    expect(r.reply.content).toBe("Süper Mert Bey, bugün 20:00'ye listeye ekledim.");
+    expect(r.todo?.content).toBe("Listeye ekledim: 20 dk hafif yürüyüş — bugün 20:00");
+    const todos = await listTodos(db, "2026-10-26", "2026-10-26");
+    expect(todos.map((t) => [t.title, t.time, t.source])).toEqual([["20 dk hafif yürüyüş", "20:00", "sohbet"]]);
+
+    // Aynı şey tekrar önerilirse ikinci kez eklenmez; model listeyi bağlamda görür
+    const again = fakeLlm([`Zaten listede.\n${MARKER}`]);
+    const r2 = await handleChat({ db, llm: again.fn, fts: true, now: NOW }, { conversationId: r.conversationId, message: "Tamam", mode: "yazi" });
+    expect(r2.todo).toBeNull();
+    expect(again.calls[0].system).toContain("Yapılacaklar listesi (bugün): 20:00 20 dk hafif yürüyüş (yapılmadı)");
+
+    const undone = await undoChatAction(db, r.todo!.id);
+    expect(undone?.content).toBe("Listeden çıkarıldı: 20 dk hafif yürüyüş — bugün 20:00");
+    expect(await listTodos(db, "2026-10-26", "2026-10-26")).toEqual([]);
+  });
+
+  it("Mert kabul etmediyse model ekleyemez", async () => {
+    const llm = fakeLlm([`Listeye ekledim.\n${MARKER}`]);
+    const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Selam", mode: "yazi" });
+    expect(r.todo).toBeNull();
+    expect(r.reply.content).not.toContain("YAPILACAK");
+    expect(await listTodos(db, "2026-10-26", "2026-10-26")).toEqual([]);
+  });
+
+  it("'yürüyüşü yaptım' listedeki maddeyi kapatır (koşu gününde programda yok uyarısı vermeden)", async () => {
+    const add = fakeLlm([`Ekledim.\n${MARKER}`]);
+    await handleChat({ db, llm: add.fn, fts: true, now: NOW }, { message: "Olur, 20:00", mode: "yazi" });
+    const llm = fakeLlm(["Helal Mert Bey, işaretledim."]);
+    const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Akşam yürüyüşünü yaptım", mode: "yazi" });
+    expect(r.marks?.content).toBe("İşaretledim: 20 dk hafif yürüyüş");
+    expect(llm.calls[0].system).not.toContain("programında yok");
+    expect((await listTodos(db, "2026-10-26", "2026-10-26"))[0].done).toBe(true);
+    await undoChatAction(db, r.marks!.id);
+    expect((await listTodos(db, "2026-10-26", "2026-10-26"))[0].done).toBe(false);
   });
 });
 

@@ -477,7 +477,7 @@ okuyucu. Her faz sonunda Mert onayı.
   `MIGRATIONS` dizisi; **yayınlanmış adımı değiştirme, yeni adım ekle**),
   FTS5 (`memories_fts`, oluşturulamazsa `ftsAvailable=false`), varsayılan
   program/temizlik tablosu (tablo boşsa), tarif senkronu.
-- Tablolar: `settings` (anahtar/JSON değer), `schedule_items`,
+- Tablolar: `todos` (v4, yapılacaklar; yumuşak silme), `settings` (anahtar/JSON değer), `schedule_items`,
   `routine_log` (PK date+item), `meals`, `meal_log` (soft delete),
   `chores` (rotation JSON), `memories` (+`memories_fts`),
   `conversations`, `messages`, `projects`, `project_state`,
@@ -579,6 +579,20 @@ okuyucu. Her faz sonunda Mert onayı.
   ÖNCE işaretler (`source = "sohbet"`), "İşaretledim: …" satırı (rol `not`,
   `meta.routine`) + "Geri al" (`DELETE /api/assistant/chat/marks/[id]`).
   Elle işaretleme (Bugün ekranı) aynen duruyor.
+- **Yapılacaklar listesi** (Mert'in kararı): `todos` tablosu,
+  `lib/server/todo-repo.ts`, `/api/assistant/todos` (+`[id]`), Bugün
+  ekranında "Yapılacaklar" kartı (elle ekle/işaretle/sil). Sohbetten: model
+  bir öneri yapar → Mert kabul eder → saat sorulur → model cevabın sonuna
+  `[[YAPILACAK gün=… saat=… başlık=…]]` yazar. `lib/assistant/todo-marker.ts`
+  bu satırı HER ZAMAN siler, doğrular (bugün..+30 gün, saat, başlık) ve
+  yalnızca Mert'in mesajı kabul/zaman içeriyorsa (`userAcceptedTodo`) ekler;
+  aynı gün aynı başlık eklenmez. "Listeye ekledim … · Geri al" satırı (rol
+  `not`, `meta.todoId`). "Akşam yürüyüşünü yaptım" → bugünün listesinden kökü
+  geçen madde kapanır (`meta.todosDone`). Bağlamda bugünün listesi + 7 günlük
+  "Yaklaşan" satırı var. Geri alma tek uç: `undoChatAction`.
+- **Sağlık şikâyetleri** (Mert'in kararı): pratik tavsiye, kalıp "doktora
+  görünün" yok; yalnızca ciddi uyarı işaretlerinde (göğüs ağrısı, bayılma,
+  belirgin şişlik, günlerdir geçmeyen/artan ağrı…) tek cümle muayene önerisi.
 - Prompt turu kararları: yemek önerisi 2–3 tek satırlık seçenek (adım adım
   tarif yalnızca istenirse); "Mert Bey" → "siz", lakap → "sen"
   (`usesFormalYou`); rutin sorusu yalnızca spor/rutin konusunda, sohbette

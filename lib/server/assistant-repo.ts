@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, type AssistantSettings } from "@/lib/assistant/config
 import { buildDailyBrief, type DailyBrief } from "@/lib/assistant/daily";
 import { addDays, weekStart } from "@/lib/assistant/time";
 import type { Chore, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem } from "@/lib/assistant/types";
+import { listTodos } from "./todo-repo";
 
 // Asistan tablolarının okuma/yazma fonksiyonları. İstemci (Client) parametre
 // olarak alınır — böylece testler yerel bir libSQL dosyasıyla çalışabilir.
@@ -173,13 +174,14 @@ export async function deleteMealLog(db: Client, id: number) {
 /** Günlük özet — LLM'siz. Haftalık tutarlılık + kalan porsiyon + 5 gün kuralı için ~2 haftalık geçmişi okur. */
 export async function getDailyBrief(db: Client, date: string, time: string): Promise<DailyBrief> {
   const from = [addDays(date, -14), weekStart(date)].sort()[0];
-  const [settings, schedule, meals, chores, mealLog, routineLog] = await Promise.all([
+  const [settings, schedule, meals, chores, mealLog, routineLog, todos] = await Promise.all([
     getSettings(db),
     listSchedule(db),
     listMeals(db),
     listChores(db),
     listMealLog(db, from, date),
     listRoutineLog(db, from, date),
+    listTodos(db, date, date),
   ]);
-  return buildDailyBrief({ date, time, hitap: settings.hitap, schedule, meals, chores, mealLog, routineLog });
+  return buildDailyBrief({ date, time, hitap: settings.hitap, schedule, meals, chores, mealLog, routineLog, todos });
 }

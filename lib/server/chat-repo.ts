@@ -3,7 +3,8 @@ import type { ChatMode } from "@/lib/assistant/persona";
 import type { RoutineItem } from "@/lib/assistant/types";
 
 // Sohbetler ve mesajlar. Rol "not" = sistem satırı: "Not aldım: …" (meta.memoryId)
-// ya da sohbetten rutin işaretleme "İşaretledim: …" (meta.routine). Modele gitmez.
+// sohbetten rutin işaretleme "İşaretledim: …" (meta.routine) ya da listeye ekleme
+// "Listeye ekledim: …" (meta.todoId). Modele gitmez.
 
 export type MessageRole = "user" | "assistant" | "not";
 
@@ -15,10 +16,18 @@ export interface ChatMessage {
   mode: ChatMode;
   createdAt: string;
   /**
-   * memoryId: "Not aldım" satırının notu; routine: sohbetten işaretlenen maddeler (geri alınabilir);
-   * routineUndone: işaretleme geri alındı; system: kota/hata mesajı (modele geçmiş olarak gitmez)
+   * memoryId: "Not aldım" satırının notu; routine (+todosDone): sohbetten işaretlenen rutin maddeleri ve
+   * yapılacaklar; todoId: sohbetten listeye eklenen madde; routineUndone: bu satırın işlemi geri alındı;
+   * system: kota/hata mesajı (modele geçmiş olarak gitmez)
    */
-  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; routineUndone?: boolean; system?: boolean } | null;
+  meta: {
+    memoryId?: number;
+    routine?: { date: string; items: RoutineItem[] };
+    todosDone?: number[];
+    todoId?: number;
+    routineUndone?: boolean;
+    system?: boolean;
+  } | null;
 }
 
 export interface Conversation {

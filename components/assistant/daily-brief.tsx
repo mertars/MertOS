@@ -1,18 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, CloudOff, Database, RefreshCw, Utensils, Sparkles } from "lucide-react";
+import { Check, CloudOff, Database, Plus, RefreshCw, Utensils, Sparkles, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ApiError, fetchBrief, logMeal, readCachedBrief, setRoutine, undoMealLog, type CachedBrief } from "@/lib/assistant/client";
+import {
+  addTodoItem,
+  ApiError,
+  deleteTodoItem,
+  fetchBrief,
+  logMeal,
+  readCachedBrief,
+  setRoutine,
+  setTodoItemDone,
+  undoMealLog,
+  type CachedBrief,
+} from "@/lib/assistant/client";
 import type { BriefMeal, DailyBrief } from "@/lib/assistant/daily";
-import type { RoutineItem } from "@/lib/assistant/types";
+import type { RoutineItem, TodoItem } from "@/lib/assistant/types";
 import { showUndoToast, useToastStore } from "@/lib/store/toast-store";
 import { cn } from "@/lib/utils";
 
 // "Bugün" ekranının üstündeki asistan bölümü: günün kararı (§ 16.1), günlük
-// program + rutin işaretleme, öğün önerileri, temizlik ve haftalık tutarlılık
-// (§ 16.3). Hepsi sunucudaki LLM'siz günlük motordan gelir.
+// program + rutin işaretleme, öğün önerileri, temizlik, yapılacaklar listesi
+// (elle ya da sohbetten eklenir) ve haftalık tutarlılık (§ 16.3). Hepsi
+// sunucudaki LLM'siz günlük motordan gelir.
 
 type LoadState =
   | { status: "yukleniyor" }
@@ -54,6 +66,37 @@ export function DailyBriefSection() {
     } catch (e) {
       push({ title: "Kaydedilemedi", description: e instanceof Error ? e.message : undefined, variant: "danger" });
       load();
+    }
+  }
+
+  async function toggleTodo(todo: TodoItem, done: boolean) {
+    if (state.status !== "hazir") return;
+    setState({ status: "hazir", brief: { ...state.brief, todos: (state.brief.todos ?? []).map((t) => (t.id === todo.id ? { ...t, done } : t)) } });
+    try {
+      await setTodoItemDone(todo.id, done);
+    } catch (e) {
+      push({ title: "Kaydedilemedi", description: e instanceof Error ? e.message : undefined, variant: "danger" });
+    }
+    load();
+  }
+
+  async function removeTodo(todo: TodoItem) {
+    try {
+      await deleteTodoItem(todo.id);
+      load();
+    } catch (e) {
+      push({ title: "Silinemedi", description: e instanceof Error ? e.message : undefined, variant: "danger" });
+    }
+  }
+
+  async function createTodo(title: string, time: string | null) {
+    try {
+      await addTodoItem(title, time);
+      load();
+      return true;
+    } catch (e) {
+      push({ title: "Eklenemedi", description: e instanceof Error ? e.message : undefined, variant: "danger" });
+      return false;
     }
   }
 
@@ -119,7 +162,14 @@ export function DailyBriefSection() {
     );
   }
 
-  return <BriefView brief={state.brief} onToggle={toggleRoutine} onMealEaten={markMealEaten} />;
+  return (
+    <BriefView
+      brief={state.brief}
+      onToggle={toggleRoutine}
+      onMealEaten={markMealEaten}
+      todoActions={{ onToggle: toggleTodo, onDelete: removeTodo, onAdd: createTodo }}
+    />
+  );
 }
 
 /** Sunucudan özeti çeker; hata türüne göre çevrimdışı/önbellek durumuna düşer. 401'de null (giriş sayfasına yönlendirildi). */
@@ -165,11 +215,13 @@ function BriefView({
   readOnly,
   onToggle,
   onMealEaten,
+  todoActions,
 }: {
   brief: DailyBrief;
   readOnly?: boolean;
   onToggle?: (item: RoutineItem, done: boolean) => void;
   onMealEaten?: (meal: BriefMeal) => void;
+  todoActions?: TodoActions;
 }) {
   const mealsByType = new Map(brief.meals.map((m) => [m.mealType, m]));
   const w = brief.week;
@@ -240,6 +292,9 @@ function BriefView({
         </ul>
       </Card>
 
+      {/* Yapılacaklar — eski önbellekte `todos` olmayabilir */}
+      <TodoCard todos={brief.todos ?? []} actions={readOnly ? undefined : todoActions} />
+
       {/* Haftalık tutarlılık */}
       <Card>
         <p className="text-[13px] font-semibold mb-2.5">Bu hafta</p>
@@ -251,6 +306,94 @@ function BriefView({
         </div>
       </Card>
     </div>
+  );
+}
+
+interface TodoActions {
+  onToggle: (todo: TodoItem, done: boolean) => void;
+  onDelete: (todo: TodoItem) => void;
+  onAdd: (title: string, time: string | null) => Promise<boolean>;
+}
+
+function TodoCard({ todos, actions }: { todos: TodoItem[]; actions?: TodoActions }) {
+  const [title, setTitle] = useState("");
+  const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!actions || !title.trim() || saving) return;
+    setSaving(true);
+    if (await actions.onAdd(title.trim(), time || null)) {
+      setTitle("");
+      setTime("");
+    }
+    setSaving(false);
+  }
+
+  return (
+    <Card>
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-[15px] font-semibold">Yapılacaklar</p>
+        {todos.length > 0 && (
+          <p className="text-[13px] font-semibold tabular-nums text-[var(--color-text-secondary)]">
+            {todos.filter((t) => t.done).length}/{todos.length}
+          </p>
+        )}
+      </div>
+      {todos.length === 0 && <p className="text-[12.5px] text-[var(--color-text-tertiary)] mb-2">Boş. Buradan ya da asistanla sohbetten eklenir.</p>}
+      <ul className="space-y-1">
+        {todos.map((t) => (
+          <li key={t.id} className="flex items-center gap-3 py-1">
+            <span className="w-11 shrink-0 text-[12.5px] font-medium tabular-nums text-[var(--color-text-tertiary)]">{t.time ?? "—"}</span>
+            <p className={cn("min-w-0 flex-1 text-[14px] leading-snug", t.done && "text-[var(--color-text-tertiary)] line-through")}>{t.title}</p>
+            {actions && (
+              <>
+                <button onClick={() => actions.onDelete(t)} aria-label={`${t.title}: sil`} className="flex h-9 w-7 items-center justify-center text-[var(--color-text-tertiary)]">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => actions.onToggle(t, !t.done)}
+                  aria-label={t.done ? `${t.title}: yapılmadı olarak işaretle` : `${t.title}: yapıldı olarak işaretle`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center -my-2 -mr-2"
+                >
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 items-center justify-center rounded-full border transition-colors",
+                      t.done ? "border-transparent bg-[var(--color-uretkenlik)] text-black" : "border-[var(--color-border-strong)]",
+                    )}
+                  >
+                    {t.done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                  </span>
+                </button>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {actions && (
+        <form onSubmit={submit} className="mt-2 flex items-center gap-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ekle…"
+            maxLength={80}
+            aria-label="Yapılacak"
+            className="min-w-0 flex-1 h-10 rounded-[12px] border border-[var(--color-border-strong)] bg-[var(--color-card-raised)] px-3 text-[14px] outline-none placeholder:text-[var(--color-text-tertiary)] focus:border-white/30"
+          />
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            aria-label="Saat (isteğe bağlı)"
+            className="h-10 w-[92px] rounded-[12px] border border-[var(--color-border-strong)] bg-[var(--color-card-raised)] px-2 text-[14px] tabular-nums outline-none focus:border-white/30"
+          />
+          <Button type="submit" size="icon" disabled={saving || !title.trim()} aria-label="Ekle">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </form>
+      )}
+    </Card>
   );
 }
 

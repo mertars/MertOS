@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, CheckCircle2, CloudOff, MessageCirclePlus, RotateCcw, Send, X } from "lucide-react";
+import { BookmarkPlus, CheckCircle2, CloudOff, ListPlus, MessageCirclePlus, RotateCcw, Send, X } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,8 @@ import { cn } from "@/lib/utils";
 // Asistan — yazılı sohbet (Faz 2). Ses ve proaktif konuşma Faz 4'te, yeni
 // tasarım Faz 3'te. Sohbet veri değiştirmez; yalnızca hafıza notu çıkarır
 // ("Not aldım: …" satırı — yanındaki ✕ ile hemen silinebilir) ve Mert "koştum"
-// deyince rutini işaretler ("İşaretledim: …" satırı — "Geri al" ile geri alınır).
+// deyince rutini işaretler ("İşaretledim: …"), kabul edilen öneriyi listeye ekler
+// ("Listeye ekledim: …") — ikisi de "Geri al" ile geri alınır.
 
 export default function AsistanPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export default function AsistanPage() {
     setMessages((m) => [...(m ?? []), optimistic]);
     try {
       const r = await sendChat(conversationId, text);
-      const fresh = r.marks ? [r.userMessage, r.marks, r.reply] : [r.userMessage, r.reply];
+      const fresh = [r.userMessage, r.marks, r.reply, r.todo].filter((x): x is ClientChatMessage => x !== null);
       if (r.conversationId !== conversationId) {
         // Yeni sohbet açıldı (ilk mesaj ya da 6 saatlik sessizlik): ekranda yalnızca yenisi.
         setMessages(fresh);
@@ -149,13 +150,15 @@ export default function AsistanPage() {
             <div key={m.id} className="flex items-center justify-center gap-1.5 text-[11.5px] text-[var(--color-text-tertiary)]">
               {m.meta?.routine ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-[var(--color-success)]" />
+              ) : m.meta?.todoId ? (
+                <ListPlus className="h-3.5 w-3.5 text-[var(--color-uretkenlik)]" />
               ) : m.meta?.routineUndone ? (
                 <RotateCcw className="h-3.5 w-3.5" />
               ) : (
                 <BookmarkPlus className="h-3.5 w-3.5 text-[var(--color-zihin)]" />
               )}
               <span>{m.content}</span>
-              {m.meta?.routine && (
+              {(m.meta?.routine || m.meta?.todoId) && (
                 <button onClick={() => undoMark(m)} className="h-8 px-2 font-medium text-[var(--color-text-secondary)] underline underline-offset-2">
                   Geri al
                 </button>
