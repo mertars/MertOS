@@ -1,6 +1,6 @@
 import type { Client, Row } from "@libsql/client";
 import { DEFAULT_SETTINGS, type AssistantSettings } from "@/lib/assistant/config";
-import { buildDailyBrief, type DailyBrief } from "@/lib/assistant/daily";
+import { buildDailyBrief, computeHistory, type DailyBrief, type DayHistory } from "@/lib/assistant/daily";
 import { addDays, weekStart } from "@/lib/assistant/time";
 import type { Chore, Meal, MealLogRow, MealType, RoutineItem, RoutineLogRow, ScheduleItem } from "@/lib/assistant/types";
 import { listTodos } from "./todo-repo";
@@ -165,11 +165,34 @@ export async function addMealLog(
   return Number(res.lastInsertRowid);
 }
 
+/** Hafızam > Yediği tarifler: puan / "tekrar yap" düzeltmesi ya da silmenin geri alınması. */
+export async function updateMealLog(db: Client, id: number, patch: { rating?: number | null; repeat?: boolean; restore?: boolean }) {
+  const sets: string[] = [];
+  const args: (string | number | null)[] = [];
+  if (patch.rating !== undefined) {
+    sets.push("rating = ?");
+    args.push(patch.rating);
+  }
+  if (patch.repeat !== undefined) {
+    sets.push("repeat = ?");
+    args.push(patch.repeat ? 1 : 0);
+  }
+  if (patch.restore) sets.push("deleted_at = NULL");
+  if (!sets.length) return;
+  await db.execute({ sql: `UPDATE meal_log SET ${sets.join(", ")} WHERE id = ?`, args: [...args, id] });
+}
+
 export async function deleteMealLog(db: Client, id: number) {
   await db.execute({ sql: `UPDATE meal_log SET deleted_at = ? WHERE id = ?`, args: [new Date().toISOString(), id] });
 }
 
 // --- Günlük özet ---------------------------------------------------------------
+
+/** Sağlık ekranı: son `days` günün geçmişi (bugün dahil). */
+export async function getHealthHistory(db: Client, to: string, days: number): Promise<DayHistory[]> {
+  const [schedule, routineLog] = await Promise.all([listSchedule(db), listRoutineLog(db, addDays(to, -(days - 1)), to)]);
+  return computeHistory({ to, days, schedule, routineLog });
+}
 
 /** Günlük özet — LLM'siz. Haftalık tutarlılık + kalan porsiyon + 5 gün kuralı için ~2 haftalık geçmişi okur. */
 export async function getDailyBrief(db: Client, date: string, time: string): Promise<DailyBrief> {

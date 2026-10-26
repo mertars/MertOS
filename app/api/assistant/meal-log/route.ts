@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { istanbulNow } from "@/lib/assistant/time";
-import { addMealLog, deleteMealLog } from "@/lib/server/assistant-repo";
+import { addDays, istanbulNow } from "@/lib/assistant/time";
+import { addMealLog, deleteMealLog, listMealLog, updateMealLog } from "@/lib/server/assistant-repo";
 import { getDb } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/http";
 
@@ -15,6 +15,40 @@ const bodySchema = z.object({
   repeat: z.boolean().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
+
+/** Hafızam > Yediği tarifler: son `?days=` gün (varsayılan 60, en fazla 365), yeniden eskiye. */
+export async function GET(req: Request) {
+  const raw = Number(new URL(req.url).searchParams.get("days") ?? 60);
+  const days = Number.isInteger(raw) ? Math.min(365, Math.max(1, raw)) : 60;
+  const today = istanbulNow().date;
+  try {
+    const rows = await listMealLog(await getDb(), addDays(today, -(days - 1)), today);
+    return NextResponse.json({ meals: rows.reverse() });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+const patchSchema = z
+  .object({
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+    repeat: z.boolean().optional(),
+    restore: z.literal(true).optional(),
+  })
+  .refine((p) => p.rating !== undefined || p.repeat !== undefined || p.restore, "boş düzeltme");
+
+/** Düzelt: puan / "tekrar yap"; `restore` silmeyi geri alır. */
+export async function PATCH(req: Request) {
+  const id = Number(new URL(req.url).searchParams.get("id"));
+  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  if (!Number.isInteger(id) || id <= 0 || !parsed.success) return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
+  try {
+    await updateMealLog(await getDb(), id, parsed.data);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
 
 export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));

@@ -12,10 +12,13 @@ export const DEFAULT_MODELS = {
 
 export type EffectLevel = "tam" | "orta" | "dusuk" | "kapali";
 export type VoiceChoice = "tarayici" | "gemini";
+/** Arka plan (Faz 3): ince ışık çizgilerinden dalga yüzeyi ya da cilalı siyahta ışık + toz. */
+export type BackgroundChoice = "dalga" | "toz";
 
 export interface AssistantSettings {
   hitap: string;
   efekt: EffectLevel;
+  arka: BackgroundChoice;
   ses: VoiceChoice;
   modelChat: string;
   modelLight: string;
@@ -24,6 +27,7 @@ export interface AssistantSettings {
 export const DEFAULT_SETTINGS: AssistantSettings = {
   hitap: "Mert Bey",
   efekt: "tam",
+  arka: "dalga",
   ses: "tarayici",
   modelChat: DEFAULT_MODELS.chat,
   modelLight: DEFAULT_MODELS.light,

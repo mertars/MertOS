@@ -8,9 +8,9 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { AssistantSettingsCard } from "@/components/settings/assistant-settings-card";
+import { AppearanceCard } from "@/components/settings/appearance-card";
 import { ModuleToggleList } from "@/components/settings/module-toggle-list";
 import { PinSetupSheet } from "@/components/settings/pin-setup-sheet";
 import { DangerZoneSheet } from "@/components/settings/danger-zone-sheet";
@@ -20,7 +20,6 @@ import { disablePin } from "@/lib/pin/repo";
 import { downloadBackupFile, exportAllData, importBackupFile } from "@/lib/backup/export-import";
 import { loadDemoData } from "@/data/seed/demo";
 import { useToastStore } from "@/lib/store/toast-store";
-import type { ThemeMode } from "@/lib/db/types";
 
 const APP_VERSION = "2.0.0 — 2. Aşama";
 
@@ -112,20 +111,6 @@ export default function AyarlarPage() {
         </div>
 
         <Card>
-          <p className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-3">Görünüm</p>
-          <Label>Tema</Label>
-          <Segmented
-            options={[
-              { value: "koyu", label: "Koyu" },
-              { value: "acik", label: "Açık" },
-              { value: "sistem", label: "Sistem" },
-            ]}
-            value={settings.theme}
-            onChange={(v: ThemeMode) => db.settings.update(SINGLETON_IDS.SETTINGS_ID, { theme: v })}
-          />
-        </Card>
-
-        <Card>
           <p className="text-[13px] font-semibold text-[var(--color-text-primary)] mb-3">Skor Ağırlıkları</p>
           <div className="space-y-3">
             {(
@@ -160,6 +145,7 @@ export default function AyarlarPage() {
         </Card>
 
         {/* Bildirimler kapatıldı (görev dosyası § 15) — sayfa kodu duruyor ama menüden kaldırıldı. */}
+        <AppearanceCard />
         <AssistantSettingsCard />
 
         <Card>

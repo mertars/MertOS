@@ -144,6 +144,9 @@ data/seed/     # motivasyon cümleleri, besin DB, öğün şablonları, demo ver
 modüllerin/hub'ların var olduğu, hangi fazda tamamlandığı
 (`phase: 1 | 2`), varsayılan açık/kapalı durumu, rengi ve route'u.
 
+> Faz 3 notu: alt sekme çubuğu artık `components/fx/app-shell.tsx`
+> (`lib/nav.ts` silindi); registry yalnızca Hub'lar/modül listelerini besler.
+
 `CURRENT_PHASE` sabiti UI'da neyin göründüğünü kontrol eder — **şu an 2**:
 - `getEnabledModules/getEnabledHubs/getModulesForHub` sadece
   `phase <= CURRENT_PHASE && moduleToggles[id] !== false` olan kayıtları
@@ -465,8 +468,8 @@ dosyasındaki "ücretsiz katman" ilkesinin yerini aldı). Maliyet sigortası:
 `llm_usage` tablosu) + Google tarafında harcama sınırı.
 
 Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ✅
-(senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam
-(Hafızam ✅, tasarım görev dosyasındaki tarifi bekliyor) · 4) ses + proaktif
+(senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam ✅
+(§ 15.7; Mert onayı sonrası uygulandı) · 4) ses + proaktif
 konuşma · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
 kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
 depodaki varsayılan dal — `main` adında dal yok) gönderilir.
@@ -477,10 +480,44 @@ yapıştırdıkça buraya eklenir.
 
 ### 15.6 Hafızam (Faz 3)
 
-- `/asistan/hafizam` (sohbet başlığındaki beyin ikonu + Ayarlar > Asistan):
-  notlar kategoriye göre, arama, yerinde düzelt, sil + "Geri al"
-  (`restoreMemory`, `POST /api/assistant/memories/[id]`). § 8 gereği elle
-  not ekleme YOK.
+- `/asistan/hafizam` (telefonda alt sekme, bilgisayarda üst sekme): kartlar —
+  sevdikleri/sevmedikleri (yemek_tercihi; "sevm…" içeren = sevmediği),
+  yediği tarifler (son 60 gün `meal_log`: tarih, yıldız puan, "tekrar yap";
+  `GET|PATCH /api/assistant/meal-log`, `updateMealLog`), alışkanlıklar,
+  notlar (sağlık/kişisel/tarif/diğer). Her kayıtta yalnızca düzelt ve sil +
+  "Geri al" (`restoreMemory`; tarifte `restore`). § 8 gereği elle not ekleme YOK.
+
+### 15.7 Yeni tasarım (Faz 3) — `docs/gorev-dosyasi/faz-3-tasarim.md`
+
+- Mert'in onay turları: renkli 3D parçalar ve ilk mikrofon reddedildi →
+  arka plan `dalga` (ince ışık çizgilerinden 3D dalga; varsayılan) ya da
+  `toz` (cilalı siyahta ışık + toz); mikrofon koyu cam küre + sesle akışkan
+  dalgalanan üç ince çember.
+- `components/fx/`: `app-shell.tsx` (kabuk: telefonda 5 alt sekme Asistan/
+  Bugün/Sağlık/Projeler/Hafızam, bilgisayarda üstte Asistan/Hafızam/
+  Ayarlar), `effect-level.tsx` (Tam/Orta/Düşük/Kapalı + arka plan; sunucu
+  ayarı `efekt`/`arka` → localStorage önbelleği; sistemin "hareketi azalt"ı
+  en fazla Düşük), `wallpaper.tsx`, `mic-orb.tsx`, `glass-card.tsx`,
+  `bits.tsx`, `chat-view.tsx`, `assistant-panel.tsx`, `today-cards.tsx`,
+  `today-view.tsx`, `health-cards.tsx`, `desktop-home.tsx`.
+- Bilgisayar (`lg`, `useIsDesktop`): `/asistan` ve `/bugun` tek ekranlık 3
+  sütun — sol sağlık + yapılacaklar, orta büyük mikrofon + sohbet, sağ günün
+  kararı + program + projeler; sayfa kaydırması yok, uzun liste kartın içinde kayar.
+- Veri hook'ları: `lib/assistant/use-brief.ts` (günlük özet, iyimser
+  işaretleme, çevrimdışı önbellek), `use-chat.ts` (sohbet + işlem kartları
+  "Geri al"), `use-dictation.ts` (mikrofon: tarayıcı konuşma tanıma tr-TR →
+  "ses" kipinde gönderilir; sesli cevap Faz 4).
+- Yeni: `GET /api/assistant/health` (`computeHistory`: gün gün spor + rutin),
+  `/saglik` (haftalık + son 7 gün + eski sağlık modülleri + eski MertOS
+  paneli), `/projeler` (yaklaşan 7 gün yapılacaklar + Faz 5 yer tutucu),
+  Ayarlar > Görünüm (`components/settings/appearance-card.tsx`).
+- Yazı: Chakra Petch + Martian Mono (`app/layout.tsx`). Stiller
+  `app/globals.css` sonunda `@layer components` içinde `.fx*` (katman dışında
+  yazılınca Tailwind yardımcıları ezemiyordu); `backdrop-filter` yalnızca
+  standart yazılır (önekle birlikte yazılınca derleyici standart olanı atıyordu).
+- Eski tema seçimi (Koyu/Açık/Sistem) kaldırıldı — her zaman koyu; eski alt
+  sekme çubuğu (`components/shell/tab-bar.tsx`, `lib/nav.ts`) silindi; eski
+  modüller (Hub'lar, İstatistik…) yeni kabuk içinde açılır.
 
 ### 15.1 Veri: Turso (libSQL)
 

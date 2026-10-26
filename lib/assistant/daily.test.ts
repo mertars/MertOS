@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CHORES, DEFAULT_SCHEDULE } from "@/data/assistant/defaults";
-import { buildDailyBrief, choresForDate, computeWeeklyConsistency, currentMealType, dayTypeFor, routineItemsForDay } from "./daily";
+import { buildDailyBrief, choresForDate, computeHistory, computeWeeklyConsistency, currentMealType, dayTypeFor, routineItemsForDay } from "./daily";
 import { addDays, isoWeekNumber, istanbulNow, weekStart } from "./time";
 import type { RoutineLogRow } from "./types";
 
@@ -78,7 +78,7 @@ describe("buildDailyBrief", () => {
     expect(b.dayType).toBe("kosu");
     expect(b.weekdayName).toBe("Pazartesi");
     expect(b.meals.every((m) => m.suggestion.kind === "yok")).toBe(true);
-    expect(b.decision).toBe("Mert Bey, Koşu günü: 6,5 km Zone 2 koşu.");
+    expect(b.decision).toBe("Mert Bey, koşu günü: 6,5 km Zone 2 koşu.");
   });
 
   it("yapılan maddeleri işaretler ve kararda koşuyu tamam sayar", () => {
@@ -86,6 +86,15 @@ describe("buildDailyBrief", () => {
     expect(b.schedule.find((s) => s.routineItem === "kosu")!.done).toBe(true);
     expect(b.routine.done).toBe(1);
     expect(b.decision).toContain("koşu tamam");
+  });
+
+  it("kararda öğün cümlesi büyük harfle başlar, yemek adı küçük harfle", () => {
+    const meals = [
+      { id: "m", name: "Mercimek çorbası", mealTypes: ["ogle", "aksam"], durationMin: 35, difficulty: "kolay", equipment: ["ocak"], steps: [], ingredients: [], servings: 3, reheat: "ocak", dayTypes: [], tags: [] },
+    ] as Parameters<typeof buildDailyBrief>[0]["meals"];
+    const mealLog = [{ id: 1, date: "2026-10-25", mealType: "aksam" as const, mealId: "m", mealName: "Mercimek çorbası", isLeftover: false, rating: null, note: null, repeat: false, createdAt: "" }];
+    const b = buildDailyBrief({ ...base, time: "12:30", meals, mealLog, routineLog: [] });
+    expect(b.decision).toBe("Mert Bey, koşu günü: 6,5 km Zone 2 koşu. Öğle: kalan mercimek çorbası (ocak).");
   });
 
   it("hitap ayardan gelir", () => {
@@ -98,5 +107,22 @@ describe("currentMealType", () => {
     expect(currentMealType("08:00")).toBe("kahvalti");
     expect(currentMealType("12:30")).toBe("ogle");
     expect(currentMealType("20:00")).toBe("aksam");
+  });
+});
+
+describe("computeHistory", () => {
+  it("gün gün spor ve rutin; bugün dahil, eskiden yeniye", () => {
+    const routineLog: RoutineLogRow[] = [
+      { date: "2026-10-25", item: "kosu", done: true, updatedAt: "" },
+      { date: "2026-10-25", item: "uyanis", done: true, updatedAt: "" },
+      { date: "2026-10-24", item: "yuruyus", done: false, updatedAt: "" },
+      { date: MON, item: "uyanis", done: true, updatedAt: "" },
+    ];
+    const h = computeHistory({ to: MON, days: 3, schedule: DEFAULT_SCHEDULE, routineLog });
+    expect(h.map((d) => d.date)).toEqual(["2026-10-24", "2026-10-25", MON]);
+    expect(h.map((d) => d.dayType)).toEqual(["yuruyus", "kosu", "kosu"]);
+    expect(h.map((d) => d.sportDone)).toEqual([false, true, false]);
+    expect(h[1].routineDone).toBe(2);
+    expect(h[2].routineTotal).toBe(routineItemsForDay(DEFAULT_SCHEDULE, "kosu").length);
   });
 });

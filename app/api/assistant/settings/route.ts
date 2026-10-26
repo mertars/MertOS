@@ -8,6 +8,7 @@ const patchSchema = z
   .object({
     hitap: z.string().trim().min(1).max(40),
     efekt: z.enum(["tam", "orta", "dusuk", "kapali"]),
+    arka: z.enum(["dalga", "toz"]),
     ses: z.enum(["tarayici", "gemini"]),
   })
   .partial();

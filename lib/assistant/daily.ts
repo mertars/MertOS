@@ -75,6 +75,33 @@ export interface WeeklyConsistency {
   mealLogs: { count: number; expected: number };
 }
 
+/** Sağlık ekranı için gün gün geçmiş (LLM yok): günün sporu yapıldı mı, rutinin kaçı yapıldı. */
+export interface DayHistory {
+  date: string;
+  dayType: DayType;
+  sportDone: boolean;
+  routineDone: number;
+  routineTotal: number;
+}
+
+export function computeHistory(params: { to: string; days: number; schedule: ScheduleItem[]; routineLog: RoutineLogRow[] }): DayHistory[] {
+  const doneSet = new Set(params.routineLog.filter((r) => r.done).map((r) => `${r.date}|${r.item}`));
+  const out: DayHistory[] = [];
+  for (let i = params.days - 1; i >= 0; i--) {
+    const date = addDays(params.to, -i);
+    const dayType = dayTypeFor(date);
+    const items = routineItemsForDay(params.schedule, dayType);
+    out.push({
+      date,
+      dayType,
+      sportDone: doneSet.has(`${date}|${dayType === "kosu" ? "kosu" : "yuruyus"}`),
+      routineDone: items.filter((it) => doneSet.has(`${date}|${it}`)).length,
+      routineTotal: items.length,
+    });
+  }
+  return out;
+}
+
 export function computeWeeklyConsistency(params: {
   date: string;
   schedule: ScheduleItem[];
@@ -229,23 +256,27 @@ export function currentMealType(time: string): MealType {
   return "aksam";
 }
 
-/** "Günün kararı" (§ 16.1): tek cümle, kod üretir. */
+const lowerFirst = (s: string) => s.charAt(0).toLocaleLowerCase("tr-TR") + s.slice(1);
+
+/**
+ * "Günün kararı" (§ 16.1): tek cümle, kod üretir. Hitaptan sonra küçük harf, nokta
+ * sonrası cümleler büyük harf: "Mert Bey, koşu günü: 6,5 km Zone 2 koşu. Öğle: kalan mercimek çorbası (ocak)."
+ */
 export function buildDecision(brief: DailyBrief): string {
-  const parts: string[] = [];
   const sport = brief.dayType === "kosu" ? "kosu" : "yuruyus";
   const sportDone = brief.schedule.some((s) => s.routineItem === sport && s.done);
-  if (sportDone) {
-    parts.push(`${brief.dayTypeLabel}, ${brief.dayType === "kosu" ? "koşu" : "yürüyüş"} tamam`);
-  } else {
-    parts.push(`${brief.dayTypeLabel}: ${brief.dayType === "kosu" ? "6,5 km Zone 2 koşu" : "4 km yürüyüş + 14 dk duvar oturuşu"}`);
-  }
+  const label = lowerFirst(brief.dayTypeLabel);
+  const first = sportDone
+    ? `${label}, ${brief.dayType === "kosu" ? "koşu" : "yürüyüş"} tamam`
+    : `${label}: ${brief.dayType === "kosu" ? "6,5 km Zone 2 koşu" : "4 km yürüyüş + 14 dk duvar oturuşu"}`;
 
+  let mealPart = "";
   const meal = brief.meals.find((m) => m.mealType === currentMealType(brief.time) && !m.logged) ?? brief.meals.find((m) => !m.logged);
   if (meal) {
     const s = meal.suggestion;
-    if (s.kind === "kalan") parts.push(`${meal.label.toLowerCase()}: kalan ${s.meal.name}${s.meal.reheat ? ` (${s.meal.reheat})` : ""}`);
-    else if (s.kind === "yeni") parts.push(`${meal.label.toLowerCase()}: ${s.meal.name}${s.meal.servings > 1 ? ` — toplu pişir, ${s.meal.servings} öğüne yeter` : ""}`);
+    if (s.kind === "kalan") mealPart = `${meal.label}: kalan ${lowerFirst(s.meal.name)}${s.meal.reheat ? ` (${s.meal.reheat})` : ""}`;
+    else if (s.kind === "yeni") mealPart = `${meal.label}: ${lowerFirst(s.meal.name)}${s.meal.servings > 1 ? ` — toplu pişir, ${s.meal.servings} öğüne yeter` : ""}`;
   }
 
-  return `${brief.hitap}, ${parts.join(". ")}.`.replace(/\.\.$/, ".");
+  return `${brief.hitap}, ${first}.${mealPart ? ` ${mealPart}.` : ""}`;
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import type { AssistantSettings } from "./config";
-import type { DailyBrief } from "./daily";
+import type { DailyBrief, DayHistory } from "./daily";
 import type { MemoryCategory } from "./memory-extract";
-import type { MealType, RoutineItem, TodoItem } from "./types";
+import type { MealLogRow, MealType, RoutineItem, TodoItem } from "./types";
 
 // İstemci tarafı: asistan API'lerine istekler + son günlük özetin telefonda
 // saklanması (§ 16.2 — koşuda bağlantı zayıfsa son özet gösterilir).
@@ -60,11 +60,19 @@ export async function fetchBrief(): Promise<DailyBrief> {
   return brief;
 }
 
+export function fetchHealthHistory(days = 14) {
+  return request<{ days: DayHistory[] }>(`/api/assistant/health?days=${days}`);
+}
+
 export function setRoutine(item: RoutineItem, done: boolean) {
   return request<{ ok: true }>("/api/assistant/routine", { method: "POST", body: JSON.stringify({ item, done }) });
 }
 
 // --- Yapılacaklar --------------------------------------------------------------
+
+export function fetchTodos(from: string, to: string) {
+  return request<{ todos: TodoItem[] }>(`/api/assistant/todos?from=${from}&to=${to}`);
+}
 
 export function addTodoItem(title: string, time: string | null) {
   return request<{ todo: TodoItem }>("/api/assistant/todos", { method: "POST", body: JSON.stringify({ title, time }) });
@@ -82,6 +90,14 @@ export function logMeal(entry: { mealType: MealType; mealId: string | null; meal
   return request<{ ok: true; id: number }>("/api/assistant/meal-log", { method: "POST", body: JSON.stringify(entry) });
 }
 
+export function fetchMealLog(days = 60) {
+  return request<{ meals: MealLogRow[] }>(`/api/assistant/meal-log?days=${days}`);
+}
+
+export function patchMealLog(id: number, patch: { rating?: number | null; repeat?: boolean; restore?: true }) {
+  return request<{ ok: true }>(`/api/assistant/meal-log?id=${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
 export function undoMealLog(id: number) {
   return request<{ ok: true }>(`/api/assistant/meal-log?id=${id}`, { method: "DELETE" });
 }
@@ -90,7 +106,7 @@ export function fetchAssistantSettings() {
   return request<AssistantSettings>("/api/assistant/settings");
 }
 
-export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "ses">>) {
+export function patchAssistantSettings(patch: Partial<Pick<AssistantSettings, "hitap" | "efekt" | "arka" | "ses">>) {
   return request<AssistantSettings>("/api/assistant/settings", { method: "PATCH", body: JSON.stringify(patch) });
 }
 
@@ -134,10 +150,11 @@ export function fetchChat(conversationId: string | null) {
   return request<{ conversationId: string | null; messages: ClientChatMessage[] }>(`/api/assistant/chat${q}`);
 }
 
-export function sendChat(conversationId: string | null, message: string) {
+/** `mode`: "ses" → kısa, sesli okunacak cevap (mikrofonla söylenen mesajlar). */
+export function sendChat(conversationId: string | null, message: string, mode: "yazi" | "ses" = "yazi") {
   return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; todo: ClientChatMessage | null; failure: string | null }>("/api/assistant/chat", {
     method: "POST",
-    body: JSON.stringify({ conversationId, message, mode: "yazi" }),
+    body: JSON.stringify({ conversationId, message, mode }),
   });
 }
 

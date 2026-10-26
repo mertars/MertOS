@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { EffectLevel } from "@/lib/assistant/config";
-import { useEffectLevel } from "./effect-level";
+import type { BackgroundChoice, EffectLevel } from "@/lib/assistant/config";
+import { useBackgroundChoice, useEffectLevel } from "./effect-level";
 
 // Hareketli arka plan (Faz 3). Mert renkli 3D parçaları reddetti (26 Ekim 2026);
 // yerine iki sade-gösterişli seçenek:
@@ -13,7 +13,7 @@ import { useEffectLevel } from "./effect-level";
 // Efekt seviyesi çizgi/zerre sayısını, hızı, kare hızını ve çözünürlüğü belirler;
 // "kapali"da canvas hiç yok; sekme gizliyken çizim durur.
 
-export type WallpaperVariant = "dalga" | "toz";
+export type WallpaperVariant = BackgroundChoice;
 
 interface LevelConfig {
   lines: number;
@@ -153,8 +153,11 @@ function drawDust(ctx: CanvasRenderingContext2D, w: number, h: number, t: number
   ctx.globalAlpha = 1;
 }
 
-export function Wallpaper({ variant = "dalga", className }: { variant?: WallpaperVariant; className?: string }) {
+/** `variant` verilmezse ayardaki seçim (Ayarlar > Görünüm). */
+export function Wallpaper({ variant: forced, className }: { variant?: WallpaperVariant; className?: string }) {
   const level = useEffectLevel();
+  const chosen = useBackgroundChoice();
+  const variant = forced ?? chosen;
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {

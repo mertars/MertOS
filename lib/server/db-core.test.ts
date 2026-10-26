@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, setRoutineDone, updateSettings } from "./assistant-repo";
+import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, setRoutineDone, updateMealLog, updateSettings } from "./assistant-repo";
 import { createBackup, serializeBackup, BACKUP_KEEP } from "./backup";
 import { prepareDatabase } from "./db-core";
 import { MIGRATIONS } from "./schema";
@@ -60,6 +60,20 @@ describe("günlük kayıt + özet", () => {
     expect(await listMealLog(db, date, date)).toEqual([]);
     brief = await getDailyBrief(db, date, "14:00");
     expect(brief.meals.find((m) => m.mealType === "ogle")!.logged).toBeNull();
+  });
+
+  it("Hafızam: yediği tarifte puan / tekrar yap düzeltilir, silme geri alınır", async () => {
+    const date = "2026-10-25";
+    const id = await addMealLog(db, { date, mealType: "aksam", mealId: null, mealName: "Tavuklu nohut", isLeftover: false, rating: 3 });
+    await updateMealLog(db, id, { rating: 5, repeat: true });
+    let [row] = await listMealLog(db, date, date);
+    expect([row.rating, row.repeat]).toEqual([5, true]);
+    await updateMealLog(db, id, { rating: null });
+    await deleteMealLog(db, id);
+    expect(await listMealLog(db, date, date)).toEqual([]);
+    await updateMealLog(db, id, { restore: true });
+    [row] = await listMealLog(db, date, date);
+    expect([row.id, row.rating, row.repeat]).toEqual([id, null, true]);
   });
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useEffectLevel } from "./effect-level";
 
@@ -50,6 +51,7 @@ export function MicOrb({
   onClick,
   className,
   label = "Mikrofon",
+  href,
 }: {
   size?: number;
   active: boolean;
@@ -57,6 +59,8 @@ export function MicOrb({
   onClick?: () => void;
   className?: string;
   label?: string;
+  /** Verilirse düğme yerine bağlantı (ör. Bugün ekranındaki kısayol → /asistan) */
+  href?: string;
 }) {
   const level = useEffectLevel();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -158,15 +162,9 @@ export function MicOrb({
     return () => cancelAnimationFrame(raf);
   }, [level, size]);
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={active}
-      className={cn("group relative grid place-items-center rounded-full outline-none transition-transform duration-300 active:scale-[0.96]", className)}
-      style={{ width: size, height: size }}
-    >
+  const cls = cn("group relative grid place-items-center rounded-full outline-none transition-transform duration-300 active:scale-[0.96]", className);
+  const body = (
+    <>
       {level !== "kapali" && (
         <canvas
           ref={canvasRef}
@@ -180,7 +178,8 @@ export function MicOrb({
         className={cn("absolute inset-0 overflow-hidden rounded-full", active && level === "kapali" && "ring-1 ring-white/60")}
         style={{
           background: "radial-gradient(120% 120% at 50% 0%, #2a2a2e 0%, #121214 38%, #050506 75%)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 -10px 24px rgba(0,0,0,0.7), 0 18px 40px -16px rgba(0,0,0,0.9)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.28), inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 -10px 24px rgba(0,0,0,0.7), 0 18px 40px -16px rgba(0,0,0,0.9)",
         }}
       >
         {/* üst yansıma */}
@@ -196,6 +195,17 @@ export function MicOrb({
         />
       </span>
       <MicGlyph size={size * 0.3} />
+    </>
+  );
+  if (href)
+    return (
+      <Link href={href} aria-label={label} className={cls} style={{ width: size, height: size }}>
+        {body}
+      </Link>
+    );
+  return (
+    <button type="button" onClick={onClick} aria-label={label} aria-pressed={active} className={cls} style={{ width: size, height: size }}>
+      {body}
     </button>
   );
 }
