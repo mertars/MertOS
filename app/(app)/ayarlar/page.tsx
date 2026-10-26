@@ -3,13 +3,14 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { differenceInDays } from "date-fns";
-import { Download, Upload, Sparkles, Trash2, ShieldCheck, BellRing, ChevronRight, HeartPulse, Info, AlertCircle } from "lucide-react";
+import { Download, Upload, Sparkles, Trash2, ShieldCheck, HeartPulse, Info, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
+import { AssistantSettingsCard } from "@/components/settings/assistant-settings-card";
 import { ModuleToggleList } from "@/components/settings/module-toggle-list";
 import { PinSetupSheet } from "@/components/settings/pin-setup-sheet";
 import { DangerZoneSheet } from "@/components/settings/danger-zone-sheet";
@@ -158,15 +159,8 @@ export default function AyarlarPage() {
           </div>
         </Card>
 
-        <Link href="/ayarlar/bildirimler">
-          <Card className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <BellRing className="h-4 w-4 text-[var(--color-text-secondary)]" />
-              <span className="text-[13.5px] font-medium text-[var(--color-text-primary)]">Bildirimler</span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-[var(--color-text-tertiary)]" />
-          </Card>
-        </Link>
+        {/* Bildirimler kapatıldı (görev dosyası § 15) — sayfa kodu duruyor ama menüden kaldırıldı. */}
+        <AssistantSettingsCard />
 
         <Card>
           <div className="flex items-center justify-between">

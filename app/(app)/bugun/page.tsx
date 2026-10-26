@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Greeting } from "@/components/home/greeting";
 import { Dashboard } from "@/components/home/dashboard";
+import { DailyBriefSection } from "@/components/assistant/daily-brief";
 import { addWaterEntry, softDeleteWaterEntry } from "@/lib/db/repo/water";
 import { addCigaretteEntry, softDeleteCigaretteEntry } from "@/lib/db/repo/cigarette";
 import { showUndoToast } from "@/lib/store/toast-store";
@@ -12,6 +13,7 @@ export default function BugunPage() {
   return (
     <div className="space-y-5 pb-6">
       <Greeting />
+      <DailyBriefSection />
       <Suspense fallback={null}>
         <QuickShortcutHandler />
       </Suspense>

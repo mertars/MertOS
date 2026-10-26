@@ -1,9 +1,41 @@
 # MertOS
 
 Mert'in kişisel hayat işletim sistemi. iPhone'da bir PWA (ana ekrana eklenen
-uygulama) olarak çalışır. **Tüm verilerin telefonunda kalır** — bu proje
-sadece kodu barındırmak için Vercel'e konur, hiçbir kişisel veri sunucuya
-gitmez.
+uygulama) olarak çalışır.
+
+Veri iki yerde durur:
+
+- **Asistan verisi** (günlük program, rutin işaretleri, öğün kayıtları,
+  ayarlar, ileride hafıza ve sohbetler) → **Turso** bulut veritabanında.
+  Telefon ve Mac aynı veriyi görür.
+- **Eski modüllerin verisi** (su, sigara, antrenman, hub'lar…) → hâlâ
+  telefonun kendi hafızasında (IndexedDB). Bunlara dokunulmadı.
+
+Site tek şifreyle korunur: giriş yapmadan hiçbir sayfa açılmaz, hiçbir API
+cevap vermez.
+
+## Asistan kurulumu (Turso + şifre)
+
+1. **Turso hesabı:** [app.turso.tech](https://app.turso.tech) → GitHub ile
+   giriş → **Create Database** → ad: `mertos`, bölge: Avrupa (örn.
+   Frankfurt) → oluştur.
+2. Veritabanı sayfasında **Connect**'e tıkla: `libsql://…` adresini ve
+   **Generate Token** ile oluşturulan anahtarı kopyala (anahtar bir kez
+   gösterilir).
+3. Siteyi aç: değişkenler henüz yoksa `/giris` sayfası **Kurulum** ekranı
+   gösterir. Şifreni iki kez yaz, Turso adresini ve anahtarını yapıştır,
+   **Ayar metnini oluştur** → **Kopyala**. (Şifre tarayıcıda şifrelenir,
+   hiçbir yere gönderilmez.)
+4. **Vercel → projen → Settings → Environment Variables** → ilk "Key"
+   kutusuna yapıştır (satırlar kendiliğinden ayrılır) → **Save**.
+5. **Deployments** → en üstteki deploy → **⋯ → Redeploy**.
+6. Siteyi telefonda ve Mac'te birer kez aç, şifreyle gir. Oturum 180 gün
+   sürer ve kullandıkça kendiliğinden uzar.
+
+Haftalık yedek: Vercel Cron her Pazartesi 04:00'te (TR) asistan
+tablolarının bir kopyasını aynı veritabanındaki `backups` tablosuna yazar
+(son 8 kopya tutulur). Ayrıca **Ayarlar → Asistan → Sunucu yedeğini
+indir** ile anlık bir JSON dosyası indirebilirsin.
 
 ## Vercel'e deploy
 
@@ -40,21 +72,11 @@ kullanır, ekstra ayar gerekmez.
 
 ### Offline kullanım
 
-Uygulama tamamen offline çalışır — uçak modunda bile su, sigara, antrenman
-kaydı yapabilirsin, veriler telefondaki IndexedDB'de tutulur. İlk açılışta
-bir kez internetteyken açman, sayfaların önbelleğe alınması için yeterli.
-
-### Bildirim izni
-
-**Ayarlar → Bildirimler**'den ana anahtarı açtığında tarayıcı bir izin
-istemi gösterir — izin verince bu cihaz push bildirimi almaya başlar.
-iPhone'da bunun çalışması için:
-
-- iOS **16.4 veya üzeri** olması gerekir.
-- Uygulama Safari'den değil, **Ana Ekrana Ekle** ile kurulan PWA ikonundan
-  açılmış olmalı (bildirim izni Safari sekmesinde çalışmaz).
-- Bildirim sunucusu (aşağıya bak) kurulu olmalı — kurulu değilse anahtar
-  "yapılandırılmamış" hatası verir, bu beklenen bir durumdur.
+Eski modüller offline çalışır — uçak modunda bile su, sigara, antrenman
+kaydı yapabilirsin, veriler telefondaki IndexedDB'de tutulur. Asistanın
+günlük planı ise internet ister: bağlantı yoksa "Bugün" ekranı son
+indirilen özeti "Çevrimdışı — son güncelleme …" etiketiyle gösterir,
+işaretleme yapılamaz. Giriş için de bir kez internet gerekir.
 
 ## Apple Sağlık köprüsü
 
@@ -120,7 +142,11 @@ Her iki yöntemde de içe aktarma **çakışan antrenmanları otomatik atlar**
 işaretlenir, tekrar eklenmez) — aynı JSON'u yanlışlıkla iki kez içe
 aktarsan bile veri çoğalmaz.
 
-## Bildirim sunucusu kurulumu (opsiyonel)
+## Bildirim sunucusu kurulumu (KAPATILDI)
+
+> Asistan planı gereği bildirimler kapatıldı: `/api/push/*` uç noktaları
+> 410 döner, Ayarlar menüsünden kaldırıldı. cron-job.org'da bir görev
+> kurduysan silebilirsin. Aşağıdaki adımlar yalnızca kayıt için duruyor.
 
 Push bildirimleri, tamamen opsiyonel küçük bir sunucu bileşeni ister —
 **hiçbiri kurulmazsa uygulamanın geri kalanı sorunsuz çalışmaya devam
@@ -151,23 +177,25 @@ sayı/etiket (bkz. `lib/notifications/types.ts`).
 5. Ayarlar → Bildirimler'den bildirimleri aç, kategorileri/saatleri/
    şablonları düzenle, "Test bildirimi gönder" ile doğrula.
 
-## AI Koç kurulumu (opsiyonel)
+## Asistan sohbeti — Gemini anahtarı
 
-**Koç** sekmesi kişisel bir sohbet koçu sunar: sabah brifingi, haftalık
-değerlendirme, serbest antrenman önerisi ve açık sohbet. Ham kayıtların
-(tek tek su/sigara/antrenman girişleri) **hiçbiri** Anthropic'e gitmez —
-sadece son 7-30 güne ait küçük, özetlenmiş sayısal istatistikler
-(`lib/coach/context.ts`) gönderilir.
+Sohbet Google Gemini API'sini **ücretli (faturalandırması açık) bir
+anahtarla** kullanır. Anahtar yalnızca sunucuda (Vercel ortam değişkeni)
+durur, tarayıcıya ve git'e asla gitmez.
 
-1. [console.anthropic.com](https://console.anthropic.com) → bir API
-   anahtarı oluştur.
-2. `ANTHROPIC_API_KEY` değerini Vercel ortam değişkenlerine ekle
-   (`.env.example`'a bak) ve yeniden deploy et.
-3. Ayarlar → Bildirimler'deki **"Günlük istek limiti"** ile Koç'un günde
-   kaç istek gönderebileceğini sınırlayabilirsin (varsayılan 20) — bu
-   sınır tamamen istemci tarafında, cihazındaki geçmişe göre sayılır.
-4. Kurulmazsa Koç sekmesi normal açılır ama her istek "yapılandırılmamış"
-   hatası döner — uygulamanın geri kalanını etkilemez.
+Maliyet korumaları:
+- Uygulama içi günlük sınır: `LLM_GUNLUK_SINIR` (varsayılan 200 çağrı/gün).
+  Aşılınca sohbet "limitim doldu" der, Google'a istek gitmez.
+- Google tarafında: AI Studio → proje → **harcama sınırı (spend cap)** koy;
+  Google Cloud → Billing → **Budgets & alerts** ile e-posta uyarısı kur.
+- Google Cloud → APIs & Services → Credentials → anahtar → **API
+  restrictions** → yalnızca "Generative Language API".
+
+Kurulum: Vercel → Settings → Environment Variables → `GEMINI_API_KEY`
+(isteğe bağlı `LLM_GUNLUK_SINIR`) → Save → Redeploy.
+
+Senaryo seti (cevap kalitesi ölçümü): `GEMINI_API_KEY=… npm run senaryo`
+→ `scenarios/sonuclar/` altına bir tablo yazar.
 
 ## Yedekleme
 
