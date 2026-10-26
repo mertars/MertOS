@@ -177,23 +177,23 @@ sayı/etiket (bkz. `lib/notifications/types.ts`).
 5. Ayarlar → Bildirimler'den bildirimleri aç, kategorileri/saatleri/
    şablonları düzenle, "Test bildirimi gönder" ile doğrula.
 
-## AI Koç kurulumu (opsiyonel)
+## Asistan sohbeti — Gemini anahtarı
 
-**Koç** sekmesi kişisel bir sohbet koçu sunar: sabah brifingi, haftalık
-değerlendirme, serbest antrenman önerisi ve açık sohbet. Ham kayıtların
-(tek tek su/sigara/antrenman girişleri) **hiçbiri** Anthropic'e gitmez —
-sadece son 7-30 güne ait küçük, özetlenmiş sayısal istatistikler
-(`lib/coach/context.ts`) gönderilir.
+Sohbet Google Gemini'nin **ücretsiz katmanını** kullanır; para harcanmaz.
+Not: ücretsiz katmanda gönderilen metinler Google tarafından model
+geliştirmede kullanılabilir. Bu yüzden modele yalnızca kısa özetler
+(bugünün planı, ilgili notlar, son mesajlar) gider.
 
-1. [console.anthropic.com](https://console.anthropic.com) → bir API
-   anahtarı oluştur.
-2. `ANTHROPIC_API_KEY` değerini Vercel ortam değişkenlerine ekle
-   (`.env.example`'a bak) ve yeniden deploy et.
-3. Ayarlar → Bildirimler'deki **"Günlük istek limiti"** ile Koç'un günde
-   kaç istek gönderebileceğini sınırlayabilirsin (varsayılan 20) — bu
-   sınır tamamen istemci tarafında, cihazındaki geçmişe göre sayılır.
-4. Kurulmazsa Koç sekmesi normal açılır ama her istek "yapılandırılmamış"
-   hatası döner — uygulamanın geri kalanını etkilemez.
+1. [aistudio.google.com](https://aistudio.google.com) → Google hesabınla
+   giriş → **Get API key** → **Create API key** → kopyala.
+2. Vercel → Settings → Environment Variables → `GEMINI_API_KEY` →
+   yapıştır → Save → Redeploy.
+3. Kota dolarsa sohbet "Şu an sohbet limitim doldu…" der; Bugün ekranı ve
+   rutinler etkilenmez. Güncel limitler AI Studio'da proje sayfasında
+   görünür.
+
+Senaryo seti (cevap kalitesi ölçümü): `GEMINI_API_KEY=… npm run senaryo`
+→ `scenarios/sonuclar/` altına bir tablo yazar.
 
 ## Yedekleme
 

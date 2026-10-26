@@ -124,6 +124,8 @@ export const MIGRATIONS: string[][] = [
       data TEXT NOT NULL
     )`,
   ],
+  // v2 — Faz 2: mesajlara ek bilgi (ör. "Not aldım" satırının hafıza notu id'si)
+  [`ALTER TABLE messages ADD COLUMN meta TEXT`],
 ];
 
 /**

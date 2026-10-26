@@ -7,7 +7,9 @@ tasarım token'ları ve "sıradaki adımlar" burada.
 ## 0. Durum
 
 > **YENİ (Ekim 2026): "MertOS Asistan" projesi başladı** — bkz. § 15. Görev
-> dosyası 5 fazlık; **Faz 1 tamam** (Turso, giriş, günlük motor). Bildirimler
+> dosyası 5 fazlık; **Faz 1 tamam** (Turso, giriş, günlük motor), **Faz 2
+> kodu tamam** (Gemini sohbet, bağlam paketi, hafıza) — gerçek Gemini ile
+> senaryo turu Mert'in anahtarını bekliyor. Bildirimler
 > bu planla KAPATILDI (§ 10 artık tarihsel). Aşağıdaki § 0–14 eski 1./2.
 > aşamayı anlatır ve hâlâ geçerli (eski modüller IndexedDB'de çalışmaya
 > devam ediyor).
@@ -458,7 +460,7 @@ geçmişinde tam metin). Ana ilke: **%80 deterministik kod, %20 LLM**;
 sohbet veri değiştirmez (istisnalar: hafıza notu sil/düzelt, günlük
 "yapıldı" kaydı). LLM: Gemini ücretsiz katman (Faz 2). Para harcanmaz.
 
-Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ·
+Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza (kod ✅, senaryo turu bekliyor) ·
 3) yeni tasarım + Hafızam · 4) ses + proaktif konuşma · 5) GitHub proje
 okuyucu. Her faz sonunda Mert onayı.
 
@@ -531,3 +533,40 @@ okuyucu. Her faz sonunda Mert onayı.
   Blob'larını data URL olarak) içeriyor — önceden sadece 12 v1 tablosunu
   alıyordu (Faz 1'de bulunup düzeltilen hata).
 - Turso: haftalık `backups` tablosu (son 8) + elle indirme.
+
+
+### 15.5 Sohbet (Faz 2)
+
+- `lib/server/gemini.ts` (server-only) — ham fetch, `GEMINI_API_KEY`;
+  model listesi sırayla denenir (404/429'da sıradaki). Sohbet:
+  `[modelChat, modelLight]` → Flash'ın kotası dolarsa Flash-Lite'a düşer.
+  Model adları `lib/assistant/config.ts` (şu an `-latest` takma adları —
+  ücretsiz katman limitleri AI Studio'dan teyit edilmedi).
+- `lib/assistant/persona.ts` — TEK prompt dosyası: kimlik, hitap, program,
+  dürüstlük, sınırlar, yemek uzmanlığı, 8 örnek diyalog (**TASLAK**, Mert
+  onaylayacak), ton (`pickTone`: konu → saat), format (ses/yazı). Sabit
+  çekirdek en başta → Gemini'nin örtük önbelleğine uygun; açık
+  context caching kullanılmadı (çekirdek ~1k token, eşiğin altında).
+- `lib/server/chat.ts` — `handleChat`: bağlam paketi = çekirdek + bugün
+  (`describeToday`) + kayıtlar (`buildFacts`: `parseDayReferences` ile
+  "dün / 2 gün önce / geçen salı / 15 Eylül" koddan tarihe çevrilir, o
+  günün kayıtları konur; yoksa "kayıt yok") + FTS ile ≤5 not + sohbet özeti
+  + son 8 mesaj. Ölçülen boyut ~4.3k karakter (~1.2k token).
+- `lib/assistant/output-check.ts` (§ 7.5) — uzunluk kırpma, yanlış hitap,
+  bağlamda olmayan tarih, kayıtta olmayan "yediniz" yemeği → en fazla 1
+  yeniden üretim.
+- Hafıza (§ 7.3): `extractMemories` hafif model + JSON şema; KOD süzer
+  (`filterExtractedNotes`: Mert'in kelimelerine dayanmalı, hassas kategori
+  güven ≥0.9, tekrar yok). Tetik: sohbet ekranından çıkış (sendBeacon →
+  `/api/assistant/chat/end`), "Yeni sohbet", ya da sonraki mesajda 20 dk
+  sessiz kalmış sohbetler (`after()`). "Not aldım: …" satırı `messages`
+  rolü `not` + `meta.memoryId`; ✕ ile silinir. 90 günlük eski küçük notlar
+  `consolidateOldMemories` ile birleştirilir.
+- Özet: özetlenmemiş mesaj >16 olunca son 8 hariç hafif modelle özet.
+- UI: `/asistan` (alt sekme "Asistan"; eski `/koc` yönlendirir). Eski
+  Anthropic Koç kodu silindi (ücretli API); Dexie'deki `coachMessages`
+  tablosu veri olarak duruyor.
+- Testler: `lib/server/chat.test.ts` SAHTE LLM ile yalnızca kod yolu.
+  Kalite: `scenarios/` (28 senaryo, gerçek Gemini, `npm run senaryo`,
+  sonuç tablosu `scenarios/sonuclar/`). `GEMINI_API_BASE` yalnızca yerel
+  uçtan uca testte sahte sunucu için.

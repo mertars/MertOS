@@ -1,4 +1,4 @@
-import { Home, Grid2x2, BarChart3, Sparkles, type LucideIcon } from "lucide-react";
+import { Home, Grid2x2, BarChart3, Sparkles, MessageCircle, type LucideIcon } from "lucide-react";
 
 export interface TabDescriptor {
   id: string;
@@ -15,5 +15,5 @@ export const TABS: TabDescriptor[] = [
   { id: "hublar", label: "Hub'lar", href: "/hublar", icon: Grid2x2, phase: 1 },
   { id: "hizli-ekle", label: "Ekle", icon: Sparkles, phase: 1, isQuickAdd: true },
   { id: "istatistik", label: "İstatistik", href: "/istatistik", icon: BarChart3, phase: 2 },
-  { id: "koc", label: "Koç", href: "/koc", icon: Sparkles, phase: 2 },
+  { id: "asistan", label: "Asistan", href: "/asistan", icon: MessageCircle, phase: 2 },
 ];

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addMealLog, deleteMealLog, getDailyBrief, getSettings, listMealLog, setRoutineDone, updateSettings } from "./assistant-repo";
 import { createBackup, serializeBackup, BACKUP_KEEP } from "./backup";
 import { prepareDatabase } from "./db-core";
+import { MIGRATIONS } from "./schema";
 import { checkLoginAllowed, IP_MAX_FAILURES, recordLoginAttempt } from "./login-guard";
 
 // Gerçek bir libSQL veritabanı (yerel dosya) üzerinde — Turso ile aynı SQL motoru.
@@ -24,10 +25,10 @@ afterAll(() => {
 describe("prepareDatabase", () => {
   it("şemayı kurar, FTS5'i oluşturur, varsayılanları yazar; ikinci çalıştırma idempotent", async () => {
     const first = await prepareDatabase(db);
-    expect(first.version).toBe(1);
+    expect(first.version).toBe(MIGRATIONS.length);
     expect(first.ftsAvailable).toBe(true);
     const second = await prepareDatabase(db);
-    expect(second.version).toBe(1);
+    expect(second.version).toBe(MIGRATIONS.length);
     const n = Number((await db.execute("SELECT COUNT(*) AS n FROM schedule_items")).rows[0].n);
     expect(n).toBeGreaterThan(5);
   });

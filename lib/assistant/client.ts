@@ -83,3 +83,66 @@ export async function logout() {
   await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
   window.location.href = new URL("/giris", window.location.origin).href;
 }
+
+// --- Sohbet (Faz 2) ------------------------------------------------------------
+
+export interface ClientChatMessage {
+  id: number;
+  conversationId: string;
+  role: "user" | "assistant" | "not";
+  content: string;
+  createdAt: string;
+  meta: { memoryId?: number; system?: boolean } | null;
+}
+
+const CONVERSATION_KEY = "mertos-sohbet-id";
+
+export function storedConversationId(): string | null {
+  try {
+    return localStorage.getItem(CONVERSATION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function storeConversationId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(CONVERSATION_KEY, id);
+    else localStorage.removeItem(CONVERSATION_KEY);
+  } catch {
+    // önemli değil
+  }
+}
+
+export function fetchChat(conversationId: string | null) {
+  const q = conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : "";
+  return request<{ conversationId: string | null; messages: ClientChatMessage[] }>(`/api/assistant/chat${q}`);
+}
+
+export function sendChat(conversationId: string | null, message: string) {
+  return request<{ conversationId: string; userMessage: ClientChatMessage; reply: ClientChatMessage; failure: string | null }>("/api/assistant/chat", {
+    method: "POST",
+    body: JSON.stringify({ conversationId, message, mode: "yazi" }),
+  });
+}
+
+/** Sohbet bitti → hafıza çıkarma. "Yeni sohbet"te sonucu bekleriz. */
+export function endChat(conversationId: string) {
+  return request<{ notes: { memoryId: number; text: string }[] }>("/api/assistant/chat/end", {
+    method: "POST",
+    body: JSON.stringify({ conversationId }),
+  });
+}
+
+/** Sayfa kapanırken: cevap beklenmez (sendBeacon). */
+export function endChatBeacon(conversationId: string) {
+  try {
+    navigator.sendBeacon("/api/assistant/chat/end", new Blob([JSON.stringify({ conversationId })], { type: "application/json" }));
+  } catch {
+    // sendBeacon yoksa bir sonraki mesajda 20 dk kuralıyla çıkarılır
+  }
+}
+
+export function deleteMemoryNote(id: number) {
+  return request<{ ok: true }>(`/api/assistant/memories/${id}`, { method: "DELETE" });
+}
