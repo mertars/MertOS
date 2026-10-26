@@ -168,3 +168,173 @@ body {
 .pr-safe {
   padding-right: env(safe-area-inset-right);
 }
+
+/* ==========================================================================
+   Faz 3 — yeni tasarım (docs/gorev-dosyasi/faz-3-tasarim.md)
+   Kapsam `.fx` — eski ekranlar etkilenmez. Efekt seviyesi kökte
+   `data-fx="tam|orta|dusuk|kapali"` (components/fx/effect-level.tsx).
+   ========================================================================== */
+
+.fx {
+  --fx-bg: #030304;
+  --fx-text: #f6f5f2;
+  --fx-text-2: rgba(246, 245, 242, 0.62);
+  --fx-text-3: rgba(246, 245, 242, 0.38);
+  --fx-line: rgba(255, 255, 255, 0.08);
+
+  /* Bölüm renkleri — doygun, birbirinden ayrı */
+  --fx-saglik: #1fd16b;
+  --fx-program: #ffc531;
+  --fx-proje: #3b7bff;
+  --fx-hafiza: #8c52ff;
+  --fx-asistan: #ff5b45;
+
+  --fx-blur: 22px;
+  --fx-radius: 26px;
+  font-family: var(--font-tech), system-ui, sans-serif;
+  color: var(--fx-text);
+  background: var(--fx-bg);
+  -webkit-font-smoothing: antialiased;
+}
+[data-fx="dusuk"] .fx,
+.fx[data-fx="dusuk"] {
+  --fx-blur: 10px;
+}
+[data-fx="kapali"] .fx,
+.fx[data-fx="kapali"] {
+  --fx-blur: 0px;
+}
+
+/* Parlak siyah zemin: üstten yumuşak bir yansıma bandı + alttan çok hafif zemin ışığı */
+.fx-floor {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(90% 40% at 50% 115%, rgba(255, 255, 255, 0.035), transparent 70%),
+    linear-gradient(180deg, #070708 0%, #020203 55%, #050506 100%);
+}
+
+.fx-num {
+  font-family: var(--font-fx-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+/* Cam kart: blur + doygunluk, ince kenar ışığı (maske ile 1px degrade kenar), iç derinlik */
+.fx-glass {
+  --accent: #ffffff;
+  position: relative;
+  border-radius: var(--fx-radius);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0.025) 42%, rgba(255, 255, 255, 0.045) 100%);
+  /* Yalnızca standart özellik: -webkit- önekini derleyici ekler (ikisi birlikte yazılınca standart olan düşüyordu) */
+  backdrop-filter: blur(var(--fx-blur)) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -18px 40px -24px rgba(0, 0, 0, 0.6),
+    0 24px 60px -28px rgba(0, 0, 0, 0.9);
+  isolation: isolate;
+  overflow: hidden;
+}
+.fx-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.08) 26%,
+    rgba(255, 255, 255, 0.02) 55%,
+    color-mix(in srgb, var(--accent) 70%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+/* Bölüm rengi kartın içinden, köşeden sızar (dış neon parlaması yok) */
+.fx-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(140% 90% at 0% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 55%),
+    radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%);
+  pointer-events: none;
+  z-index: -1;
+}
+[data-fx="kapali"] .fx-glass {
+  background: linear-gradient(160deg, #141416, #0c0c0d);
+}
+
+/* Kart girişi: yükselip netleşir; sıra --i ile */
+@keyframes fx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.fx-enter {
+  animation: fx-rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+[data-fx="dusuk"] .fx-enter {
+  animation-duration: 0.35s;
+  animation-delay: 0ms;
+}
+[data-fx="kapali"] .fx-enter {
+  animation: none;
+}
+
+.fx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 85%, white);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Mikrofon boşta: çok hafif nefes (yalnızca Tam seviyede) */
+@keyframes fx-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+.fx-mic-idle {
+  animation: fx-breathe 4.5s ease-in-out infinite;
+}
+
+/* Halka girişte dolarak çizilir */
+@keyframes fx-ring {
+  from {
+    stroke-dasharray: 0 var(--len);
+  }
+}
+.fx-ring-draw {
+  animation: fx-ring 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) 0.3s both;
+}
+[data-fx="kapali"] .fx-ring-draw {
+  animation: none;
+}

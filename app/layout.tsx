@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Chakra_Petch, Inter, Martian_Mono } from "next/font/google";
 import { Providers } from "@/components/shell/providers";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+// Faz 3 tasarımı (docs/gorev-dosyasi/faz-3-tasarim.md): teknik karakterli ana yazı + rakamlar için mono.
+const tech = Chakra_Petch({ subsets: ["latin", "latin-ext"], weight: ["400", "500", "600", "700"], variable: "--font-tech", display: "swap" });
+const mono = Martian_Mono({ subsets: ["latin", "latin-ext"], variable: "--font-fx-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: "MertOS",
@@ -30,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" className={`${inter.variable} h-full`} suppressHydrationWarning>
+    <html lang="tr" className={`${inter.variable} ${tech.variable} ${mono.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col bg-[var(--color-bg)] text-[var(--color-text-primary)] antialiased">
         <Providers>{children}</Providers>
       </body>

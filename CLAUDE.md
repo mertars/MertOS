@@ -471,6 +471,10 @@ konuşma · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
 kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
 depodaki varsayılan dal — `main` adında dal yok) gönderilir.
 
+**Görev dosyası bölümleri depoda:** `docs/gorev-dosyasi/` (Faz 3 tasarım
+tarifi: `faz-3-tasarim.md` — birebir uygulanır). Diğer fazların metni Mert
+yapıştırdıkça buraya eklenir.
+
 ### 15.6 Hafızam (Faz 3)
 
 - `/asistan/hafizam` (sohbet başlığındaki beyin ikonu + Ayarlar > Asistan):
