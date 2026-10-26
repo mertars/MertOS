@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getChatDeps } from "@/lib/server/chat-deps";
 import { errorResponse } from "@/lib/server/http";
-import { deleteMemory, getMemory, updateMemoryText } from "@/lib/server/memory-repo";
+import { deleteMemory, getMemory, restoreMemory, updateMemoryText } from "@/lib/server/memory-repo";
 
-// Hafıza notunda yalnızca iki işlem var: düzelt ve sil (§ 8).
+// Hafıza notunda yalnızca iki işlem var: düzelt ve sil (§ 8). POST = silmeyi geri al.
 
 function parseId(raw: string): number | null {
   const id = Number(raw);
@@ -20,6 +20,18 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   try {
     const { db, fts } = await getChatDeps();
     await updateMemoryText(db, id, parsed.data.text, fts);
+    return NextResponse.json({ memory: await getMemory(db, id) });
+  } catch (e) {
+    return errorResponse(e);
+  }
+}
+
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const id = parseId((await ctx.params).id);
+  if (!id) return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
+  try {
+    const { db, fts } = await getChatDeps();
+    if (!(await restoreMemory(db, id, fts))) return NextResponse.json({ error: "Geri alınacak not yok." }, { status: 404 });
     return NextResponse.json({ memory: await getMemory(db, id) });
   } catch (e) {
     return errorResponse(e);

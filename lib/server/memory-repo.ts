@@ -65,6 +65,15 @@ export async function deleteMemory(db: Client, id: number, fts: boolean) {
   if (fts) await db.execute({ sql: `DELETE FROM memories_fts WHERE rowid = ?`, args: [id] });
 }
 
+/** Hafızam ekranındaki "Geri al": yalnızca silinmiş notu geri getirir. */
+export async function restoreMemory(db: Client, id: number, fts: boolean): Promise<boolean> {
+  const res = await db.execute({ sql: `UPDATE memories SET status = 'aktif', updated_at = ? WHERE id = ? AND status = 'silindi'`, args: [new Date().toISOString(), id] });
+  if (!res.rowsAffected) return false;
+  const m = await getMemory(db, id);
+  if (fts && m) await db.execute({ sql: `INSERT INTO memories_fts (rowid, text_norm) VALUES (?, ?)`, args: [id, normalizeTr(m.text)] });
+  return true;
+}
+
 export async function getMemory(db: Client, id: number): Promise<Memory | null> {
   const r = (await db.execute({ sql: `SELECT * FROM memories WHERE id = ?`, args: [id] })).rows[0];
   return r ? toMemory(r) : null;

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CloudDownload, LogOut, MessageCircle } from "lucide-react";
+import Link from "next/link";
+import { Brain, CloudDownload, LogOut, MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { fetchAssistantSettings, logout, patchAssistantSettings } from "@/lib/as
 import type { AssistantSettings } from "@/lib/assistant/config";
 import { useToastStore } from "@/lib/store/toast-store";
 
-/** Ayarlar > Asistan: hitap (sunucuda, telefon ve Mac'te aynı), sunucu yedeği, çıkış. */
+/** Ayarlar > Asistan: hitap (sunucuda, telefon ve Mac'te aynı), Hafızam, sunucu yedeği, çıkış. */
 export function AssistantSettingsCard() {
   const [settings, setSettings] = useState<AssistantSettings | null>(null);
   const [error, setError] = useState<string>();
@@ -46,6 +47,11 @@ export function AssistantSettingsCard() {
         </div>
       )}
       <div className="space-y-2">
+        <Button asChild variant="secondary" className="w-full justify-start">
+          <Link href="/asistan/hafizam">
+            <Brain className="h-4 w-4" /> Hafızam — asistanın notları
+          </Link>
+        </Button>
         <Button asChild variant="secondary" className="w-full justify-start">
           <a href="/api/backup/download" download>
             <CloudDownload className="h-4 w-4" /> Sunucu yedeğini indir

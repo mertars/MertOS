@@ -12,7 +12,7 @@ import { listMessages } from "./chat-repo";
 import { listTodos } from "./todo-repo";
 import { prepareDatabase } from "./db-core";
 import type { LlmFn, LlmRequest } from "./gemini";
-import { listActiveMemories, searchMemories } from "./memory-repo";
+import { deleteMemory, listActiveMemories, restoreMemory, searchMemories } from "./memory-repo";
 
 // SAHTE LLM ile KOD YOLU testleri — cevap kalitesi burada ölçülmez
 // (o, gerçek Gemini ile scenarios/ altındaki senaryo setinin işi).
@@ -232,5 +232,19 @@ describe("sohbet özeti", () => {
     await handleChat({ db, llm: next.fn, fts: true, now: NOW }, { conversationId: id, message: "son", mode: "yazi" });
     expect(next.calls[0].system).toContain("Mert 9 kısa mesaj attı.");
     expect(next.calls[0].contents.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("Hafızam: sil → geri al", () => {
+  it("silinen not geri gelir ve yeniden aranabilir; aktif not 'geri alınamaz'", async () => {
+    const before = await listActiveMemories(db);
+    const note = before.find((m) => m.text.toLocaleLowerCase("tr-TR").includes("ıspanak")) ?? before[0];
+    expect(note).toBeDefined();
+    await deleteMemory(db, note.id, true);
+    expect((await listActiveMemories(db)).some((m) => m.id === note.id)).toBe(false);
+    expect(await restoreMemory(db, note.id, true)).toBe(true);
+    expect((await listActiveMemories(db)).some((m) => m.id === note.id)).toBe(true);
+    expect((await searchMemories(db, note.text, true)).some((m) => m.id === note.id)).toBe(true);
+    expect(await restoreMemory(db, note.id, true)).toBe(false);
   });
 });

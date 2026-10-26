@@ -2,6 +2,7 @@
 
 import type { AssistantSettings } from "./config";
 import type { DailyBrief } from "./daily";
+import type { MemoryCategory } from "./memory-extract";
 import type { MealType, RoutineItem, TodoItem } from "./types";
 
 // İstemci tarafı: asistan API'lerine istekler + son günlük özetin telefonda
@@ -155,6 +156,29 @@ export function endChatBeacon(conversationId: string) {
   } catch {
     // sendBeacon yoksa bir sonraki mesajda 20 dk kuralıyla çıkarılır
   }
+}
+
+// --- Hafızam (Faz 3) ------------------------------------------------------------
+
+export interface ClientMemory {
+  id: number;
+  category: MemoryCategory;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt: string | null;
+}
+
+export function fetchMemories() {
+  return request<{ memories: ClientMemory[] }>("/api/assistant/memories");
+}
+
+export function updateMemoryNote(id: number, text: string) {
+  return request<{ memory: ClientMemory }>(`/api/assistant/memories/${id}`, { method: "PATCH", body: JSON.stringify({ text }) });
+}
+
+export function restoreMemoryNote(id: number) {
+  return request<{ memory: ClientMemory }>(`/api/assistant/memories/${id}`, { method: "POST" });
 }
 
 export function deleteMemoryNote(id: number) {

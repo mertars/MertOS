@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, CheckCircle2, CloudOff, ListPlus, MessageCirclePlus, RotateCcw, Send, X } from "lucide-react";
+import Link from "next/link";
+import { BookmarkPlus, Brain, CheckCircle2, CloudOff, ListPlus, MessageCirclePlus, RotateCcw, Send, X } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,13 +133,22 @@ export default function AsistanPage() {
         eyebrow="MertOS"
         title="Asistan"
         right={
-          <button
-            onClick={newConversation}
-            aria-label="Yeni sohbet"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-card-raised)] border border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"
-          >
-            <MessageCirclePlus className="h-4.5 w-4.5" />
-          </button>
+          <>
+            <Link
+              href="/asistan/hafizam"
+              aria-label="Hafızam"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-card-raised)] border border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"
+            >
+              <Brain className="h-4.5 w-4.5" />
+            </Link>
+            <button
+              onClick={newConversation}
+              aria-label="Yeni sohbet"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-card-raised)] border border-[var(--color-border-strong)] text-[var(--color-text-secondary)]"
+            >
+              <MessageCirclePlus className="h-4.5 w-4.5" />
+            </button>
+          </>
         }
       />
       <div className="px-5 mt-2 pb-44 space-y-2.5">

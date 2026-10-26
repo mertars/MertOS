@@ -464,9 +464,19 @@ dosyasındaki "ücretsiz katman" ilkesinin yerini aldı). Maliyet sigortası:
 `lib/server/usage-guard.ts` (`LLM_GUNLUK_SINIR`, varsayılan 200 çağrı/gün,
 `llm_usage` tablosu) + Google tarafında harcama sınırı.
 
-Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza (kod ✅, senaryo turu bekliyor) ·
-3) yeni tasarım + Hafızam · 4) ses + proaktif konuşma · 5) GitHub proje
-okuyucu. Her faz sonunda Mert onayı.
+Fazlar: 1) Turso + giriş + günlük motor ✅ · 2) Gemini sohbet + hafıza ✅
+(senaryo + prompt turu yapıldı, Ekim 2026) · 3) yeni tasarım + Hafızam
+(Hafızam ✅, tasarım görev dosyasındaki tarifi bekliyor) · 4) ses + proaktif
+konuşma · 5) GitHub proje okuyucu. Her faz sonunda Mert onayı. Mert'in
+kararı: çalışma doğrudan ana dala (`claude/trusting-maxwell-bflte0`,
+depodaki varsayılan dal — `main` adında dal yok) gönderilir.
+
+### 15.6 Hafızam (Faz 3)
+
+- `/asistan/hafizam` (sohbet başlığındaki beyin ikonu + Ayarlar > Asistan):
+  notlar kategoriye göre, arama, yerinde düzelt, sil + "Geri al"
+  (`restoreMemory`, `POST /api/assistant/memories/[id]`). § 8 gereği elle
+  not ekleme YOK.
 
 ### 15.1 Veri: Turso (libSQL)
 
