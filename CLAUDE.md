@@ -431,11 +431,12 @@ Bunlar hata değil, bütçe/zaman dengesi için bilinçli kararlar:
 
 ## 13. Bilinen, kabul edilmiş uyarılar
 
-- `npm audit`: `@serwist/next`'in transitive `browserslist` bağımlılığında
-  yüksek şiddetli 2 uyarı var; düzeltmesi `@serwist/next`'i eski bir sürüme
-  düşürüyor (breaking). Bu sadece **build-time** bir araç, kullanıcı
-  verisiyle veya çalışma zamanı güvenliğiyle ilgisi yok — bilinçli olarak
-  ertelendi.
+- `npm audit`: **0 açık** (Ekim 2026 güvenlik turu — depo herkese açık).
+  Serwist kendi içinde eski `zod`'u sabitlediği için `package.json`'da
+  `"overrides": { "zod": "$zod" }` var; kaldırma. Tarayıcı güvenlik
+  başlıkları `next.config.ts`'te (CSP yalnızca gömülme/base/form/eklenti
+  kısıtı — script kısıtı nonce gerektirdiği için yok). Senaryo sonuçları
+  (`scenarios/sonuclar/`) gerçek cevap içerdiği için `.gitignore`'da.
 - Next 16 varsayılanı Turbopack'tir ama Serwist henüz desteklemiyor; bu
   yüzden `dev`/`build` script'leri `--webpack` bayrağı zorunlu.
 - Bildirim sunucusu ve AI Koç, gerçek harici servisler (Upstash hesabı,
@@ -541,6 +542,9 @@ okuyucu. Her faz sonunda Mert onayı.
 ### 15.5 Sohbet (Faz 2)
 
 - `lib/server/gemini.ts` (server-only) — ham fetch, `GEMINI_API_KEY`;
+  `thinkingLevel: "low"` gönderilir (Gemini 3'te düşünme token'ları
+  `maxOutputTokens`'tan yiyor; varsayılanda ses cevabı kelime ortasında
+  kesiliyordu). `MAX_TOKENS` → `truncated`, çıktı kontrolü yarım cümleyi atar.
   model listesi sırayla denenir (404/429'da sıradaki). Sohbet:
   `[modelChat, modelLight]` → Flash'ın kotası dolarsa Flash-Lite'a düşer.
   Model adları `lib/assistant/config.ts` (şu an `-latest` takma adları —
