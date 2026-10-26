@@ -11,7 +11,10 @@ const bodySchema = z.object({
   mode: z.enum(["yazi", "ses"]).default("yazi"),
 });
 
-/** Yazılı (ve Faz 4'te sesli) sohbet. Sohbet veri değiştirmez — yalnızca mesajlar ve hafıza notları yazılır. */
+/**
+ * Yazılı (ve Faz 4'te sesli) sohbet. Sohbet veri değiştirmez; istisnalar: mesajlar, hafıza notları
+ * ve Mert'in "yaptım" dediği günlük rutin maddelerinin işaretlenmesi (geri alınabilir).
+ */
 export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Mesaj boş olamaz." }, { status: 400 });
@@ -30,6 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       conversationId: result.conversationId,
       userMessage: result.userMessage,
+      marks: result.marks,
       reply: result.reply,
       failure: result.failure ?? null,
     });

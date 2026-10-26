@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, CloudOff, MessageCirclePlus, Send, X } from "lucide-react";
+import { BookmarkPlus, CheckCircle2, CloudOff, MessageCirclePlus, RotateCcw, Send, X } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   sendChat,
   storeConversationId,
   storedConversationId,
+  undoChatMark,
   type ClientChatMessage,
 } from "@/lib/assistant/client";
 import { useToastStore } from "@/lib/store/toast-store";
@@ -19,7 +20,8 @@ import { cn } from "@/lib/utils";
 
 // Asistan — yazılı sohbet (Faz 2). Ses ve proaktif konuşma Faz 4'te, yeni
 // tasarım Faz 3'te. Sohbet veri değiştirmez; yalnızca hafıza notu çıkarır
-// ("Not aldım: …" satırı — yanındaki ✕ ile hemen silinebilir).
+// ("Not aldım: …" satırı — yanındaki ✕ ile hemen silinebilir) ve Mert "koştum"
+// deyince rutini işaretler ("İşaretledim: …" satırı — "Geri al" ile geri alınır).
 
 export default function AsistanPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -70,11 +72,12 @@ export default function AsistanPage() {
     setMessages((m) => [...(m ?? []), optimistic]);
     try {
       const r = await sendChat(conversationId, text);
+      const fresh = r.marks ? [r.userMessage, r.marks, r.reply] : [r.userMessage, r.reply];
       if (r.conversationId !== conversationId) {
         // Yeni sohbet açıldı (ilk mesaj ya da 6 saatlik sessizlik): ekranda yalnızca yenisi.
-        setMessages([r.userMessage, r.reply]);
+        setMessages(fresh);
       } else {
-        setMessages((m) => [...(m ?? []).filter((x) => x.id !== optimistic.id), r.userMessage, r.reply]);
+        setMessages((m) => [...(m ?? []).filter((x) => x.id !== optimistic.id), ...fresh]);
       }
       setConversationId(r.conversationId);
       conversationRef.current = r.conversationId;
@@ -113,6 +116,15 @@ export default function AsistanPage() {
     }
   }
 
+  async function undoMark(m: ClientChatMessage) {
+    try {
+      const { message } = await undoChatMark(m.id);
+      setMessages((list) => (list ?? []).map((x) => (x.id === m.id ? message : x)));
+    } catch (err) {
+      push({ title: "Geri alınamadı", description: err instanceof Error ? err.message : undefined, variant: "danger" });
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -135,8 +147,19 @@ export default function AsistanPage() {
         {messages?.map((m) =>
           m.role === "not" ? (
             <div key={m.id} className="flex items-center justify-center gap-1.5 text-[11.5px] text-[var(--color-text-tertiary)]">
-              <BookmarkPlus className="h-3.5 w-3.5 text-[var(--color-zihin)]" />
+              {m.meta?.routine ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--color-success)]" />
+              ) : m.meta?.routineUndone ? (
+                <RotateCcw className="h-3.5 w-3.5" />
+              ) : (
+                <BookmarkPlus className="h-3.5 w-3.5 text-[var(--color-zihin)]" />
+              )}
               <span>{m.content}</span>
+              {m.meta?.routine && (
+                <button onClick={() => undoMark(m)} className="h-8 px-2 font-medium text-[var(--color-text-secondary)] underline underline-offset-2">
+                  Geri al
+                </button>
+              )}
               {m.meta?.memoryId && (
                 <button onClick={() => removeNote(m)} aria-label="Notu sil" className="flex h-8 w-8 items-center justify-center">
                   <X className="h-3.5 w-3.5" />

@@ -1,7 +1,9 @@
 import type { Client, Row } from "@libsql/client";
 import type { ChatMode } from "@/lib/assistant/persona";
+import type { RoutineItem } from "@/lib/assistant/types";
 
-// Sohbetler ve mesajlar. Rol "not" = "Not aldım: …" satırı (meta.memoryId).
+// Sohbetler ve mesajlar. Rol "not" = sistem satırı: "Not aldım: …" (meta.memoryId)
+// ya da sohbetten rutin işaretleme "İşaretledim: …" (meta.routine). Modele gitmez.
 
 export type MessageRole = "user" | "assistant" | "not";
 
@@ -12,8 +14,11 @@ export interface ChatMessage {
   content: string;
   mode: ChatMode;
   createdAt: string;
-  /** memoryId: "Not aldım" satırının notu; system: kota/hata mesajı (modele geçmiş olarak gitmez) */
-  meta: { memoryId?: number; system?: boolean } | null;
+  /**
+   * memoryId: "Not aldım" satırının notu; routine: sohbetten işaretlenen maddeler (geri alınabilir);
+   * routineUndone: işaretleme geri alındı; system: kota/hata mesajı (modele geçmiş olarak gitmez)
+   */
+  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; routineUndone?: boolean; system?: boolean } | null;
 }
 
 export interface Conversation {
@@ -84,6 +89,15 @@ export async function addMessage(
   });
   await db.execute({ sql: `UPDATE conversations SET updated_at = ? WHERE id = ?`, args: [now, m.conversationId] });
   return { id: Number(res.lastInsertRowid), conversationId: m.conversationId, role: m.role, content: m.content, mode: m.mode, createdAt: now, meta: m.meta ?? null };
+}
+
+export async function getMessage(db: Client, id: number): Promise<ChatMessage | null> {
+  const res = await db.execute({ sql: `SELECT * FROM messages WHERE id = ?`, args: [id] });
+  return res.rows[0] ? toMessage(res.rows[0]) : null;
+}
+
+export async function updateMessage(db: Client, id: number, content: string, meta: ChatMessage["meta"]) {
+  await db.execute({ sql: `UPDATE messages SET content = ?, meta = ? WHERE id = ?`, args: [content, meta ? JSON.stringify(meta) : null, id] });
 }
 
 export async function listMessages(db: Client, conversationId: string): Promise<ChatMessage[]> {

@@ -1,11 +1,12 @@
 import type { Client } from "@libsql/client";
 import type { AssistantSettings } from "@/lib/assistant/config";
 import type { DailyBrief } from "@/lib/assistant/daily";
-import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS } from "@/lib/assistant/daily";
+import { DAY_TYPE_LABELS, dayTypeFor, ROUTINE_LABELS, routineItemsForDay } from "@/lib/assistant/daily";
 import { parseDayReferences } from "@/lib/assistant/day-ref";
 import { buildExtractionPrompt, EXTRACTION_RESPONSE_SCHEMA, extractionSchema, filterExtractedNotes, MEMORY_CATEGORY_LABELS } from "@/lib/assistant/memory-extract";
 import { MEAL_TYPE_LABELS } from "@/lib/assistant/meals";
 import { checkOutput } from "@/lib/assistant/output-check";
+import { detectRoutineDone } from "@/lib/assistant/routine-detect";
 import {
   buildSystemPrompt,
   LLM_DOWN_MESSAGE,
@@ -17,16 +18,18 @@ import {
 } from "@/lib/assistant/persona";
 import { contentWords, formatTrDate, normalizeTr } from "@/lib/assistant/text";
 import { addDays, isoWeekday, istanbulNow, weekdayName } from "@/lib/assistant/time";
-import type { MealLogRow, RoutineLogRow } from "@/lib/assistant/types";
-import { getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog } from "./assistant-repo";
+import type { MealLogRow, RoutineItem, RoutineLogRow } from "@/lib/assistant/types";
+import { getDailyBrief, getSettings, listMealLog, listMeals, listRoutineLog, listSchedule, setRoutineDone } from "./assistant-repo";
 import {
   addMessage,
   createConversation,
   getConversation,
+  getMessage,
   listIdleUnextracted,
   listMessages,
   markMemoryExtracted,
   setSummary,
+  updateMessage,
   type ChatMessage,
   type Conversation,
 } from "./chat-repo";
@@ -148,11 +151,66 @@ function toContents(history: ChatMessage[]): LlmRequest["contents"] {
 }
 
 // ---------------------------------------------------------------------------
+// Sohbetten rutin işaretleme (görev dosyası istisnası: günlük "yapıldı" kaydı)
+
+export interface ChatMarks {
+  /** "İşaretledim: …" satırı — yeni bir şey işaretlendiyse */
+  message: ChatMessage | null;
+  /** Modele giden kısa açıklama (yoksa boş) */
+  context: string;
+}
+
+function routineLabels(items: RoutineItem[]): string {
+  return items.map((i) => ROUTINE_LABELS[i]).join(", ");
+}
+
+/**
+ * Mert'in "koştum, duş aldım" gibi cümlelerini KOD yakalar (routine-detect.ts)
+ * ve modelden ÖNCE işaretler — böylece model "işaretledim" diyebilir, "Bugün
+ * ekranından işaretleyin" demez. Zaten işaretli olan tekrar yazılmaz.
+ */
+export async function markRoutineFromChat(db: Client, conversationId: string, history: ChatMessage[], message: string, now: { date: string; time: string }): Promise<ChatMarks> {
+  const previousAssistant = history.filter((m) => m.role === "assistant" && !m.meta?.system).at(-1)?.content ?? null;
+  const schedule = await listSchedule(db);
+  const found = detectRoutineDone({ message, previousAssistant, today: now.date, time: now.time, itemsForDate: (d) => routineItemsForDay(schedule, dayTypeFor(d)) });
+  if (!found.items.length && !found.notInPlan.length) return { message: null, context: "" };
+
+  const doneBefore = new Set((await listRoutineLog(db, found.date, found.date)).filter((r) => r.done).map((r) => r.item));
+  const fresh = found.items.filter((i) => !doneBefore.has(i));
+  const already = found.items.filter((i) => doneBefore.has(i));
+  for (const item of fresh) await setRoutineDone(db, found.date, item, true, "sohbet");
+
+  const dayNote = found.date === now.date ? "" : ` (${formatTrDate(found.date)})`;
+  const lines: string[] = [];
+  if (fresh.length) lines.push(`Sistem az önce işaretledi${dayNote}: ${routineLabels(fresh)}. Kısaca onayla ("İşaretledim").`);
+  if (already.length) lines.push(`Zaten işaretliydi${dayNote}: ${routineLabels(already)}.`);
+  if (found.notInPlan.length) lines.push(`${routineLabels(found.notInPlan)} o günün programında yok — işaretlenmedi.`);
+
+  const note = fresh.length
+    ? await addMessage(db, { conversationId, role: "not", content: `İşaretledim${dayNote}: ${routineLabels(fresh)}`, mode: "yazi", meta: { routine: { date: found.date, items: fresh } } })
+    : null;
+  return { message: note, context: lines.join("\n") };
+}
+
+/** "İşaretledim" satırındaki işaretleri geri alır; satır "geri alındı" olur. */
+export async function undoRoutineMark(db: Client, messageId: number): Promise<ChatMessage | null> {
+  const m = await getMessage(db, messageId);
+  if (!m || m.role !== "not" || !m.meta?.routine) return null;
+  const { date, items } = m.meta.routine;
+  for (const item of items) await setRoutineDone(db, date, item, false, "sohbet");
+  const content = `İşaretleme geri alındı: ${routineLabels(items)}`;
+  await updateMessage(db, m.id, content, { routineUndone: true });
+  return { ...m, content, meta: { routineUndone: true } };
+}
+
+// ---------------------------------------------------------------------------
 // Ana akış
 
 export interface ChatResult {
   conversationId: string;
   userMessage: ChatMessage;
+  /** Sohbetten işaretleme satırı ("İşaretledim: Koşu") — kullanıcı mesajı ile cevap arasında */
+  marks: ChatMessage | null;
   reply: ChatMessage;
   /** Yeniden üretildi mi (§ 7.5) */
   regenerated: boolean;
@@ -174,7 +232,10 @@ export async function handleChat(
   if (conversation && nowDate.getTime() - Date.parse(conversation.updatedAt) > NEW_CONVERSATION_HOURS * 3_600_000) conversation = null;
   if (!conversation) conversation = await createConversation(db);
 
+  const history = await listMessages(db, conversation.id);
   const userMessage = await addMessage(db, { conversationId: conversation.id, role: "user", content: input.message, mode: input.mode });
+  // Önce işaretle, sonra bugünün özetini oku — model güncel durumu görsün.
+  const marks = await markRoutineFromChat(db, conversation.id, history, input.message, now);
 
   const settings = await getSettings(db);
   const models = modelsFrom(settings);
@@ -195,6 +256,7 @@ export async function handleChat(
     facts: facts.text,
     memories: memories.map((m) => `[${MEMORY_CATEGORY_LABELS[m.category]}] ${m.text}`),
     summary: conversation.summary,
+    marks: marks.context,
   });
   const contents = toContents(allMessages.slice(-RAW_HISTORY));
   const contextText = `${today}\n${facts.text}\n${memories.map((m) => m.text).join("\n")}\n${conversation.summary ?? ""}\n${allMessages.map((m) => m.content).join("\n")}`;
@@ -228,7 +290,7 @@ export async function handleChat(
     mode: input.mode,
     meta: result.ok ? null : { system: true },
   });
-  return { conversationId: conversation.id, userMessage, reply, regenerated, problems, failure: result.ok ? undefined : result.reason };
+  return { conversationId: conversation.id, userMessage, marks: marks.message, reply, regenerated, problems, failure: result.ok ? undefined : result.reason };
 }
 
 // ---------------------------------------------------------------------------

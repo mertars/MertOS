@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseDayReferences } from "./day-ref";
 import { filterExtractedNotes, isGroundedInUserText } from "./memory-extract";
 import { checkOutput, dropUnfinishedSentence, enforceLength, findUnknownDates, findUnverifiedMeals, hasWrongHitap } from "./output-check";
-import { buildSystemPrompt, pickTone } from "./persona";
+import { buildSystemPrompt, pickTone, usesFormalYou } from "./persona";
 import { buildFtsQuery, normalizeTr, wordOverlap } from "./text";
 
 const MON = "2026-10-26";
@@ -66,6 +66,16 @@ describe("buildSystemPrompt", () => {
     expect(p).not.toContain("{hitap}");
     expect(p).toContain("SES MODU");
     expect(p).toContain("DİSİPLİNLİ KOÇ");
+  });
+});
+
+describe("sen / siz", () => {
+  it("saygı hitabında 'siz', lakapta 'sen'", () => {
+    expect(usesFormalYou("Mert Bey")).toBe(true);
+    expect(usesFormalYou("Kaptan")).toBe(false);
+    const base = { tone: "arkadas" as const, mode: "yazi" as const, today: "", facts: "", memories: [], summary: null };
+    expect(buildSystemPrompt({ ...base, hitap: "Kaptan" })).toContain('"sen" diye');
+    expect(buildSystemPrompt({ ...base, hitap: "Mert Bey" })).toContain('"siz" diye');
   });
 });
 

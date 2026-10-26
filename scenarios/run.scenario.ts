@@ -70,6 +70,8 @@ describe("Gemini senaryo seti", () => {
         if (forbidden.length) notes.push(`yasak: ${forbidden.join(", ")}`);
         if (s.mode === "ses" && splitSentences(reply).length > 3) notes.push("ses: 3 cümleden uzun");
         if (r.regenerated) notes.push("1 kez yeniden üretildi");
+        if (r.marks) notes.push(`✓ ${r.marks.content}`);
+        if (!s.forbid?.includes("bugün ekran") && norm.includes("bugun ekran")) notes.push("'Bugün ekranı' hatırlatması");
         const hitapOk = !hasWrongHitap(reply, hitap);
         const fabricated = r.problems.filter((p) => !p.startsWith("Hitap")).length > 0;
         const tone = pickTone(s.time, s.message);

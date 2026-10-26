@@ -6,8 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_CHORES, DEFAULT_SCHEDULE } from "@/data/assistant/defaults";
 import { buildDailyBrief } from "@/lib/assistant/daily";
 import { QUOTA_MESSAGE } from "@/lib/assistant/persona";
-import { addMealLog } from "./assistant-repo";
-import { describeToday, extractMemories, handleChat, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
+import { addMealLog, listRoutineLog } from "./assistant-repo";
+import { describeToday, extractMemories, handleChat, undoRoutineMark, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
 import { listMessages } from "./chat-repo";
 import { prepareDatabase } from "./db-core";
 import type { LlmFn, LlmRequest } from "./gemini";
@@ -98,6 +98,49 @@ describe("handleChat", () => {
     const llm = fakeLlm(["Bir. İki. Üç. Dört."]);
     const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "selam", mode: "ses" });
     expect(r.reply.content).toBe("Bir. İki. Üç.");
+  });
+});
+
+describe("sohbetten rutin işaretleme", () => {
+  it("'koştum, duş da aldım' modelden önce işaretlenir, satırı geri alınabilir", async () => {
+    const llm = fakeLlm(["Süper Mert Bey, ikisini de işaretledim."]);
+    const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Koştum, duş da aldım.", mode: "yazi" });
+    expect(r.marks?.content).toBe("İşaretledim: Soğuk duş, Koşu");
+    expect(r.marks?.meta?.routine).toEqual({ date: "2026-10-26", items: ["soguk_dus", "kosu"] });
+    expect(llm.calls[0].system).toContain("Sistem az önce işaretledi: Soğuk duş, Koşu");
+    expect(llm.calls[0].system).toMatch(/Yapılanlar: .*Koşu/);
+    // "not" satırı modele geçmiş olarak gitmez
+    expect(llm.calls[0].contents.some((c) => c.text.includes("İşaretledim"))).toBe(false);
+    const done = (await listRoutineLog(db, "2026-10-26", "2026-10-26")).filter((x) => x.done).map((x) => x.item);
+    expect(done).toEqual(expect.arrayContaining(["soguk_dus", "kosu"]));
+
+    // Aynı şey tekrar söylenirse yeni satır yok, model "zaten işaretliydi" bilgisini alır
+    const again = fakeLlm(["Tamam."]);
+    const r2 = await handleChat({ db, llm: again.fn, fts: true, now: NOW }, { conversationId: r.conversationId, message: "Koştum", mode: "yazi" });
+    expect(r2.marks).toBeNull();
+    expect(again.calls[0].system).toContain("Zaten işaretliydi: Koşu");
+
+    const undone = await undoRoutineMark(db, r.marks!.id);
+    expect(undone?.content).toBe("İşaretleme geri alındı: Soğuk duş, Koşu");
+    expect(undone?.meta).toEqual({ routineUndone: true });
+    expect((await listRoutineLog(db, "2026-10-26", "2026-10-26")).filter((x) => x.done).map((x) => x.item)).not.toContain("kosu");
+    expect(await undoRoutineMark(db, r.marks!.id)).toBeNull();
+  });
+
+  it("asistanın sorusuna 'evet' cevabı sorulan maddeyi işaretler", async () => {
+    const first = fakeLlm(["Mert Bey, bugün koşuyu yaptınız mı?"]);
+    const r = await handleChat({ db, llm: first.fn, fts: true, now: NOW }, { message: "Selam", mode: "yazi" });
+    expect(r.marks).toBeNull();
+    const second = fakeLlm(["İşaretledim, Mert Bey."]);
+    const r2 = await handleChat({ db, llm: second.fn, fts: true, now: NOW }, { conversationId: r.conversationId, message: "Evet", mode: "yazi" });
+    expect(r2.marks?.meta?.routine?.items).toEqual(["kosu"]);
+  });
+
+  it("programda olmayan madde işaretlenmez, model bilgilendirilir", async () => {
+    const llm = fakeLlm(["Bugün koşu günü, Mert Bey."]);
+    const r = await handleChat({ db, llm: llm.fn, fts: true, now: NOW }, { message: "Yürüdüm", mode: "yazi" });
+    expect(r.marks).toBeNull();
+    expect(llm.calls[0].system).toContain("Yürüyüş o günün programında yok");
   });
 });
 

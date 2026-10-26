@@ -92,7 +92,7 @@ export interface ClientChatMessage {
   role: "user" | "assistant" | "not";
   content: string;
   createdAt: string;
-  meta: { memoryId?: number; system?: boolean } | null;
+  meta: { memoryId?: number; routine?: { date: string; items: RoutineItem[] }; routineUndone?: boolean; system?: boolean } | null;
 }
 
 const CONVERSATION_KEY = "mertos-sohbet-id";
@@ -120,7 +120,7 @@ export function fetchChat(conversationId: string | null) {
 }
 
 export function sendChat(conversationId: string | null, message: string) {
-  return request<{ conversationId: string; userMessage: ClientChatMessage; reply: ClientChatMessage; failure: string | null }>("/api/assistant/chat", {
+  return request<{ conversationId: string; userMessage: ClientChatMessage; marks: ClientChatMessage | null; reply: ClientChatMessage; failure: string | null }>("/api/assistant/chat", {
     method: "POST",
     body: JSON.stringify({ conversationId, message, mode: "yazi" }),
   });
@@ -145,4 +145,9 @@ export function endChatBeacon(conversationId: string) {
 
 export function deleteMemoryNote(id: number) {
   return request<{ ok: true }>(`/api/assistant/memories/${id}`, { method: "DELETE" });
+}
+
+/** Sohbetten yapılan rutin işaretlemesini geri al ("İşaretledim" satırı). */
+export function undoChatMark(messageId: number) {
+  return request<{ message: ClientChatMessage }>(`/api/assistant/chat/marks/${messageId}`, { method: "DELETE" });
 }

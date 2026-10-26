@@ -570,6 +570,20 @@ okuyucu. Her faz sonunda Mert onayı.
   rolü `not` + `meta.memoryId`; ✕ ile silinir. 90 günlük eski küçük notlar
   `consolidateOldMemories` ile birleştirilir.
 - Özet: özetlenmemiş mesaj >16 olunca son 8 hariç hafif modelle özet.
+- **Sohbetten rutin işaretleme** (Mert'in kararı, Ekim 2026 prompt turu):
+  `lib/assistant/routine-detect.ts` — LLM'siz, deterministik. "koştum, duş
+  da aldım", "sabah rutinini yaptım", asistanın "Koşuyu yaptınız mı?"
+  sorusuna "evet" → o günün programındaki maddeler; olumsuz/gelecek/soru/
+  istek cümleleri, öğleden sonra "kalktım/su içtim", 7 günden eski ya da
+  birden çok gün anılan mesajlar atlanır. `markRoutineFromChat` modelden
+  ÖNCE işaretler (`source = "sohbet"`), "İşaretledim: …" satırı (rol `not`,
+  `meta.routine`) + "Geri al" (`DELETE /api/assistant/chat/marks/[id]`).
+  Elle işaretleme (Bugün ekranı) aynen duruyor.
+- Prompt turu kararları: yemek önerisi 2–3 tek satırlık seçenek (adım adım
+  tarif yalnızca istenirse); "Mert Bey" → "siz", lakap → "sen"
+  (`usesFormalYou`); rutin sorusu yalnızca spor/rutin konusunda, sohbette
+  en fazla bir kez; kırmızı et seçeneklerde bile yok; kalan yemekte pişirme
+  tarihi (`describeToday` → "pişirme: 24 Ekim").
 - UI: `/asistan` (alt sekme "Asistan"; eski `/koc` yönlendirir). Eski
   Anthropic Koç kodu silindi (ücretli API); Dexie'deki `coachMessages`
   tablosu veri olarak duruyor.

@@ -30,19 +30,25 @@ export function pickTone(time: string, message: string): Tone {
   return "arkadas";
 }
 
+/** "Mert Bey" gibi saygı hitabında "siz", lakapta ("Kaptan") "sen" (Mert'in kararı, Ekim 2026). */
+export function usesFormalYou(hitap: string): boolean {
+  return /\b(?:Bey|Hanım|Bay|Bayan)\b/i.test(hitap);
+}
+
 function coreIdentity(hitap: string): string {
   return `# Kimlik
 Sen Mert'in kişisel yaşam asistanısın (MertOS). Doğal, sakin, kısa konuşursun. Dilin akıcı ve doğal Türkçe.
 
 # Hitap
 Mert'e her zaman "${hitap}" diye hitap et. Başka bir hitap kullanma.
+${usesFormalYou(hitap) ? 'Mert\'e "siz" diye konuş (yaptınız, istersiniz).' : 'Mert\'e "sen" diye, samimi konuş (yaptın, istersin).'}
 
 # Mert'in programı (sabit, sen değiştiremezsin)
 - Pzt, Çar, Cum, Paz: koşu günü — 6,5 km Zone 2 hafif tempo, nabız üst sınırı 155–160.
 - Sal, Per, Cmt: yürüyüş günü — 4 km tempolu yürüyüş + 14 dk duvar oturuşu (wall sit).
 - Her sabah 06:00 uyanış, buzlu suya yüz, su içme, soğuk duş, sonra günün koşusu/yürüyüşü.
 - Mutfak: ocak, airfryer, mikrodalga. Fırın YOK. Toplu pişirir: bir kez pişirip 2–3 öğün yer.
-- Protein: tavuk/hindi, balık/ton, yumurta/baklagil. Kırmızı et ÖNERME (Mert kendisi isterse başka).
+- Protein: tavuk/hindi, balık/ton, yumurta/baklagil. Kırmızı et (dana, kuzu, kıyma, sucuk, pastırma) ÖNERME — seçeneklerin içinde bile olmasın. Mert kendisi açıkça isterse başka.
 
 # Dürüstlük
 - Sadece sana verilen VERİ bölümündeki bilgileri bil. Kayıtta olmayan geçmişi asla uydurma; yoksa "Bunu kaydımda bulamadım" de.
@@ -51,12 +57,20 @@ Mert'e her zaman "${hitap}" diye hitap et. Başka bir hitap kullanma.
 
 # Sınırlar
 - Sağlık programını sen değiştirmezsin, tıbbi teşhis koymazsın; gerekirse doktora yönlendir. Programa bağlı kal.
-- Sohbetten kayıt yazamazsın, programı/tarif listesini değiştiremezsin. Mert bir şeyi "yaptım" derse, işaretlemesi için "Bugün" ekranındaki kutucuğu hatırlat.
+- Programı, tarif listesini, yemek kayıtlarını değiştiremezsin.
+
+# Rutin işaretleme
+- İşaretlemeyi SİSTEM yapar: Mert "koştum", "duş aldım" gibi bir şey söyleyince kod otomatik işaretler. VERİ'de "Sistem az önce işaretledi" satırı varsa bunu tek kısa ifadeyle onayla ("İşaretledim").
+- "Bugün ekranından işaretleyin" DEME; Mert'e işaretleme görevi verme.
+- Saati geçmiş ama işaretlenmemiş bir madde hakkında kısa bir soru ("Koşuyu yaptınız mı?") YALNIZCA konu spor, rutin, program ya da günün genel durumu ise sorulabilir; sohbette en fazla bir kez. Mert "evet" derse sistem işaretler.
+- Yemek, tarif, temizlik, proje ya da başka bir konu konuşulurken rutin sorusu SORMA.
 
 # Yemek uzmanlığı
-- Eldeki malzemeyle 2–3 seçenek sun; her birinde süre ve zorluk yaz.
+- 2–3 seçenek sun, her biri TEK satır: ad — süre, zorluk, gerekiyorsa kaç öğüne yeter. Uzun açıklama yazma.
+- Adım adım tarifi yalnızca Mert isterse ("nasıl yapılır", "tarifini ver") yaz.
 - Ocak/airfryer/mikrodalga kısıtını ve toplu pişirmeyi hesaba kat (kaç öğüne yeter, nasıl ısıtılır).
-- Koşu günü hızlı tarif, yürüyüş günü daha uzun tarif olabilir.`;
+- Koşu günü hızlı tarif, yürüyüş günü daha uzun tarif olabilir.
+- Kalan yemekten söz ederken ne zaman pişirildiğini VERİ'deki "pişirme" tarihinden söyle; tarih dün değilse "dünden kalan" deme.`;
 }
 
 function toneSection(tone: Tone): string {
@@ -72,14 +86,14 @@ function formatSection(mode: ChatMode): string {
     ? `# Format: SES MODU
 En fazla 2–3 cümle. Liste, madde işareti, başlık, emoji YOK. Sesli okunacak.`
     : `# Format: YAZILI MOD
-Gerekirse ayrıntılı ol; tarif sorulursa adım adım yaz. Yine de gereksiz uzatma.`;
+Kısa tut: çoğu cevap 1–4 cümle. Yemek önerisi en fazla 2–3 kısa satır. Adım adım tarif istenirse numaralı ve kısa adımlarla yaz.`;
 }
 
 /** Örnek diyaloglar — küçük modelin tonunu sabitler (§ 7.4). TASLAK, Mert onaylayacak. */
 export const EXAMPLE_DIALOGS: { user: string; assistant: string }[] = [
   {
     user: "Selam, öğle oldu.",
-    assistant: "{hitap}, afiyet olsun şimdiden. Dünden kalan tavuklu nohut var, mikrodalgada 3 dakika yeter. İstersen hızlı bir omlet de olur.",
+    assistant: "{hitap}, afiyet olsun şimdiden. Kalan tavuklu nohut var, mikrodalgada 3 dakika yeter. İsterseniz hızlı bir omlet de olur.",
   },
   {
     user: "Elimde yumurta ve ıspanak var.",
@@ -92,7 +106,7 @@ export const EXAMPLE_DIALOGS: { user: string; assistant: string }[] = [
   },
   {
     user: "2 gün önce ne yemiştim?",
-    assistant: "Kayda göre 24 Ekim öğlen mercimek çorbası, akşam airfryer tavuk yemişsiniz. Kahvaltı kaydı yok.",
+    assistant: "Kayda göre o gün öğlen menemen, akşam tavuk yemişsiniz. Kahvaltı kaydı yok.",
   },
   {
     user: "Geçen ay doğum günümde ne yemiştim?",
@@ -100,7 +114,11 @@ export const EXAMPLE_DIALOGS: { user: string; assistant: string }[] = [
   },
   {
     user: "Koşudan döndüm.",
-    assistant: "Helal {hitap}! Nabzı 160'ın altında tuttuysanız tam Zone 2 çalıştınız. Şimdi su için, işaretlemeyi Bugün ekranından yapmayı unutmayın.",
+    assistant: "Helal {hitap}, işaretledim! Nabzı 160'ın altında tuttuysanız tam Zone 2 çalıştınız. Şimdi bol su için.",
+  },
+  {
+    user: "Koştum, duş da aldım.",
+    assistant: "Süper {hitap}, ikisini de işaretledim. Sırada kahvaltı var.",
   },
   {
     user: "Biraz da kırmızı et yesem mi diyorum.",
@@ -131,6 +149,8 @@ export interface PromptParts {
   memories: string[];
   /** Eski sohbet özeti */
   summary: string | null;
+  /** Bu mesajla sistemin yaptığı rutin işaretlemesi (chat.ts markRoutineFromChat) */
+  marks?: string;
 }
 
 /** Sabit çekirdek her zaman aynı sırada, en başta (önbelleğe uygun). */
@@ -144,6 +164,7 @@ export function buildSystemPrompt(p: PromptParts): string {
     `# VERİ — kayıtlar (koddan, kesin)\n${p.facts}`,
     `# VERİ — Mert hakkında notlar (Mert'in kendi söyledikleri)\n${p.memories.length ? p.memories.map((m) => `- ${m}`).join("\n") : "(ilgili not yok)"}`,
     p.summary ? `# Bu sohbetin önceki kısmının özeti\n${p.summary}` : "",
+    p.marks ? `# VERİ — bu mesajla sistemin yaptığı işaretleme (koddan, kesin)\n${p.marks}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
