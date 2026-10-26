@@ -21,7 +21,8 @@ export interface Scenario {
   tone?: "koc" | "arkadas";
 }
 
-const RED_MEAT = ["dana", "kuzu", "kıyma", "biftek", "antrikot", "köfte", "pirzola"];
+// "köfte" yok: "tavuk/hindi köfte" uygun bir öneri; kırmızı et köftesi zaten "kıyma"/"dana" ile yakalanır.
+const RED_MEAT = ["dana", "kuzu", "kıyma", "biftek", "antrikot", "pirzola"];
 
 export const SCENARIOS: Scenario[] = [
   { id: 1, title: "Öğle yemeği selamı", time: "13:00", mode: "yazi", message: "Selam, öğle oldu.", tone: "arkadas", forbid: RED_MEAT },

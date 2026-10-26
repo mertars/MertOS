@@ -30,6 +30,22 @@ export function enforceLength(text: string, mode: ChatMode): string {
   return out || t.slice(0, MAX_CHARS[mode]).trimEnd() + "…";
 }
 
+/**
+ * Token sınırında kesilen cevabın yarım kalan son cümlesini atar ("…yirmi
+ * dakikada tert" gibi). Liste numaralarındaki nokta ("2.") cümle sonu sayılmaz.
+ */
+export function dropUnfinishedSentence(text: string): string {
+  const t = text.trimEnd();
+  if (/[.!?…]$/.test(t)) return t;
+  let cut = -1;
+  for (const m of t.matchAll(/[.!?…](?=\s)/g)) {
+    const lineStart = t.lastIndexOf("\n", m.index) + 1;
+    if (/^\s*\d+$/.test(t.slice(lineStart, m.index))) continue;
+    cut = m.index;
+  }
+  return cut > 0 ? t.slice(0, cut + 1) : `${t}…`;
+}
+
 /** Yanlış hitap: metinde "Mert" geçiyor ama ayarlı hitap biçiminde değil. */
 export function hasWrongHitap(text: string, hitap: string): boolean {
   const withoutHitap = text.split(hitap).join(" ");
@@ -76,8 +92,16 @@ export interface CheckResult {
   problems: string[];
 }
 
-export function checkOutput(params: { text: string; mode: ChatMode; hitap: string; context: string; knownMealNames: string[] }): CheckResult {
-  const text = enforceLength(params.text, params.mode);
+export function checkOutput(params: {
+  text: string;
+  mode: ChatMode;
+  hitap: string;
+  context: string;
+  knownMealNames: string[];
+  /** Model token sınırına takıldı (gemini.ts `truncated`) */
+  truncated?: boolean;
+}): CheckResult {
+  const text = enforceLength(params.truncated ? dropUnfinishedSentence(params.text) : params.text, params.mode);
   const problems: string[] = [];
   if (hasWrongHitap(text, params.hitap)) problems.push(`Hitap yanlış: her zaman "${params.hitap}" de.`);
   const dates = findUnknownDates(text, params.context);

@@ -5,7 +5,9 @@ import "server-only";
 
 export type LlmFailure = "yapilandirma" | "kota" | "ag" | "hata";
 
-export type LlmResult = { ok: true; text: string; model: string } | { ok: false; reason: LlmFailure; detail: string };
+export type LlmResult =
+  | { ok: true; text: string; model: string; /** Cevap token sınırında kesildi (finishReason MAX_TOKENS) */ truncated?: boolean }
+  | { ok: false; reason: LlmFailure; detail: string };
 
 export interface LlmRequest {
   /** Denenecek modeller sırayla: model bulunamazsa (404) ya da kotası dolarsa (429) sıradakine geçilir. */
@@ -28,6 +30,12 @@ const GOOGLE_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models
  */
 const API_BASE = !process.env.VERCEL && process.env.GEMINI_API_BASE ? process.env.GEMINI_API_BASE : GOOGLE_API_BASE;
 const TIMEOUT_MS = 25_000;
+/**
+ * Gemini 3 "düşünen" bir model: düşünme token'ları maxOutputTokens'tan yer.
+ * Varsayılan düzeyde ses modunun 400 token'ının ~380'i düşünmeye gidip cevap
+ * kelime ortasında kesiliyordu (senaryo turu, Ekim 2026). "low" yeterli.
+ */
+const THINKING_LEVEL = "low";
 
 export function isGeminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
@@ -53,13 +61,14 @@ export const callGemini: LlmFn = async (req) => {
   return last;
 };
 
-async function callOnce(model: string, req: LlmRequest, key: string): Promise<LlmResult> {
+async function callOnce(model: string, req: LlmRequest, key: string, thinking = true): Promise<LlmResult> {
   const body = {
     systemInstruction: { parts: [{ text: req.system }] },
     contents: req.contents.map((c) => ({ role: c.role, parts: [{ text: c.text }] })),
     generationConfig: {
       maxOutputTokens: req.maxOutputTokens,
       temperature: req.temperature ?? 0.7,
+      ...(thinking ? { thinkingConfig: { thinkingLevel: THINKING_LEVEL } } : {}),
       ...(req.responseSchema ? { responseMimeType: "application/json", responseSchema: req.responseSchema } : {}),
     },
   };
@@ -78,6 +87,8 @@ async function callOnce(model: string, req: LlmRequest, key: string): Promise<Ll
 
   const data = (await res.json().catch(() => ({}))) as GeminiResponse;
   if (res.status === 429) return { ok: false, reason: "kota", detail: `429 ${data.error?.message ?? ""}` };
+  // "-latest" takma adı düşünme düzeyini desteklemeyen bir modele geçerse ayarsız tekrar dene.
+  if (res.status === 400 && thinking && /thinking/i.test(data.error?.message ?? "")) return callOnce(model, req, key, false);
   if (!res.ok) {
     const reason: LlmFailure = res.status >= 500 ? "ag" : "hata";
     console.error(`[mertos] Gemini ${model} ${res.status}:`, data.error?.message);
@@ -93,5 +104,5 @@ async function callOnce(model: string, req: LlmRequest, key: string): Promise<Ll
   if (!text) {
     return { ok: false, reason: "hata", detail: `boş cevap (${candidate?.finishReason ?? data.promptFeedback?.blockReason ?? "?"})` };
   }
-  return { ok: true, text, model };
+  return { ok: true, text, model, ...(candidate?.finishReason === "MAX_TOKENS" ? { truncated: true } : {}) };
 }

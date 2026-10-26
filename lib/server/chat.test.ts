@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient, type Client } from "@libsql/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { DEFAULT_CHORES, DEFAULT_SCHEDULE } from "@/data/assistant/defaults";
+import { buildDailyBrief } from "@/lib/assistant/daily";
 import { QUOTA_MESSAGE } from "@/lib/assistant/persona";
 import { addMealLog } from "./assistant-repo";
-import { extractMemories, handleChat, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
+import { describeToday, extractMemories, handleChat, summarizeIfNeeded, SUMMARIZE_AFTER } from "./chat";
 import { listMessages } from "./chat-repo";
 import { prepareDatabase } from "./db-core";
 import type { LlmFn, LlmRequest } from "./gemini";
@@ -40,6 +42,22 @@ function fakeLlm(replies: string[]): { fn: LlmFn; calls: LlmRequest[] } {
     },
   };
 }
+
+describe("describeToday", () => {
+  it("kalan yemeğin pişirildiği günü yazar (model 'dünden kalan' diye tahmin etmesin)", () => {
+    const brief = buildDailyBrief({
+      date: "2026-10-26",
+      time: "12:00",
+      hitap: "Mert Bey",
+      schedule: DEFAULT_SCHEDULE,
+      chores: DEFAULT_CHORES,
+      routineLog: [],
+      meals: [{ id: "mercimek", name: "Mercimek çorbası", mealTypes: ["ogle", "aksam"], durationMin: 35, difficulty: "kolay", equipment: ["ocak"], steps: [], ingredients: [], servings: 3, reheat: "ocak", dayTypes: [], tags: [] }],
+      mealLog: [{ id: 1, date: "2026-10-24", mealType: "ogle", mealId: "mercimek", mealName: "Mercimek çorbası", isLeftover: false, rating: null, note: null, repeat: false, createdAt: "" }],
+    });
+    expect(describeToday(brief)).toContain("kalan Mercimek çorbası (pişirme: 24 Ekim, 2 porsiyon, ocak)");
+  });
+});
 
 describe("handleChat", () => {
   it("sorulan günün kaydını bağlama koddan koyar, hitap ve tarih bağlamda", async () => {

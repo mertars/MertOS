@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# senaryo sonuçları — gerçek Gemini cevapları; depo herkese açık, commit edilmez
+/scenarios/sonuclar/
+
 # vercel
 .vercel
 

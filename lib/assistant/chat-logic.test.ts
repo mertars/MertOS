@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDayReferences } from "./day-ref";
 import { filterExtractedNotes, isGroundedInUserText } from "./memory-extract";
-import { checkOutput, enforceLength, findUnknownDates, findUnverifiedMeals, hasWrongHitap } from "./output-check";
+import { checkOutput, dropUnfinishedSentence, enforceLength, findUnknownDates, findUnverifiedMeals, hasWrongHitap } from "./output-check";
 import { buildSystemPrompt, pickTone } from "./persona";
 import { buildFtsQuery, normalizeTr, wordOverlap } from "./text";
 
@@ -89,6 +89,14 @@ describe("çıktı kontrolü", () => {
     expect(findUnverifiedMeals("Dün tavuklu nohut yemiştiniz.", known, "Dün: menemen")).toEqual(["Tavuklu nohut"]);
     expect(findUnverifiedMeals("Bugün tavuklu nohut yapabilirsiniz.", known, "Dün: menemen")).toEqual([]);
     expect(findUnverifiedMeals("Dün menemen yediniz.", known, "Dün: menemen")).toEqual([]);
+  });
+  it("token sınırında kesilen cevabın yarım cümlesini atar", () => {
+    expect(dropUnfinishedSentence("Pilav yapın. Yirmi dakikada tert")).toBe("Pilav yapın.");
+    expect(dropUnfinishedSentence("Tamam.")).toBe("Tamam.");
+    expect(dropUnfinishedSentence("Seçenekler:\n1. Omlet yapın.\n2. Muffin")).toBe("Seçenekler:\n1. Omlet yapın.");
+    expect(dropUnfinishedSentence("Hiç nokta yok")).toBe("Hiç nokta yok…");
+    const r = checkOutput({ text: "Mert Bey, pilav yapın. Yirmi dk", truncated: true, mode: "ses", hitap: "Mert Bey", context: "", knownMealNames: [] });
+    expect(r.text).toBe("Mert Bey, pilav yapın.");
   });
   it("checkOutput sorunları listeler", () => {
     const r = checkOutput({ text: "Mert, 3 Mart'ta menemen yemiştin.", mode: "yazi", hitap: "Mert Bey", context: "", knownMealNames: ["Menemen"] });

@@ -73,7 +73,9 @@ export function describeToday(brief: DailyBrief): string {
     .map((m) => {
       if (m.logged) return `${m.label}: yendi — ${m.logged.name}${m.logged.isLeftover ? " (kalan)" : ""}`;
       const s = m.suggestion;
-      if (s.kind === "kalan") return `${m.label}: öneri — kalan ${s.meal.name} (${s.remaining} porsiyon${s.meal.reheat ? `, ${s.meal.reheat}` : ""})`;
+      // Pişirme tarihi açıkça yazılır — yoksa model "dünden kalan" diye tahmin ediyordu.
+      if (s.kind === "kalan")
+        return `${m.label}: öneri — kalan ${s.meal.name} (pişirme: ${formatTrDate(s.cookedOn)}, ${s.remaining} porsiyon${s.meal.reheat ? `, ${s.meal.reheat}` : ""})`;
       if (s.kind === "yeni") return `${m.label}: öneri — ${s.meal.name} (${s.meal.durationMin} dk${s.meal.servings > 1 ? `, ${s.meal.servings} öğüne yeter` : ""})`;
       return `${m.label}: öneri yok (${s.reason})`;
     })
@@ -207,11 +209,13 @@ export async function handleChat(
   if (!result.ok) {
     text = result.reason === "kota" ? QUOTA_MESSAGE : result.reason === "yapilandirma" ? NOT_CONFIGURED_MESSAGE : LLM_DOWN_MESSAGE;
   } else {
-    let checked = checkOutput({ text: result.text, mode: input.mode, hitap: settings.hitap, context: contextText, knownMealNames });
+    const check = (r: { text: string; truncated?: boolean }) =>
+      checkOutput({ text: r.text, truncated: r.truncated, mode: input.mode, hitap: settings.hitap, context: contextText, knownMealNames });
+    let checked = check(result);
     if (checked.problems.length) {
       regenerated = true;
       const retry = await llm({ ...request, system: `${system}\n\n# DÜZELT (önceki cevabında sorun vardı)\n${checked.problems.join("\n")}` });
-      if (retry.ok) checked = checkOutput({ text: retry.text, mode: input.mode, hitap: settings.hitap, context: contextText, knownMealNames });
+      if (retry.ok) checked = check(retry);
     }
     text = checked.text;
     problems = checked.problems;
