@@ -85,9 +85,28 @@ function turkishVoice(): SpeechSynthesisVoice | null {
   return voices.find((v) => v.lang?.toLowerCase().startsWith("tr")) ?? null;
 }
 
-function speakBrowser(text: string, my: number): Promise<boolean> {
-  if (!("speechSynthesis" in window)) return Promise.resolve(false);
+/** Chrome ses listesini geç yükler: ilk çağrıda boş gelebilir, kısa süre beklenir. */
+function voicesReady(): Promise<void> {
+  const synth = window.speechSynthesis;
+  if (synth.getVoices().length > 0) return Promise.resolve();
   return new Promise((resolve) => {
+    const done = () => {
+      synth.removeEventListener("voiceschanged", done);
+      resolve();
+    };
+    synth.addEventListener("voiceschanged", done);
+    setTimeout(done, 1000);
+  });
+}
+
+async function speakBrowser(text: string, my: number): Promise<boolean> {
+  if (!("speechSynthesis" in window)) return false;
+  await voicesReady();
+  if (my !== token) return false;
+  // Chrome: cancel() hemen ardından speak() çağrısı konuşmayı yutabiliyor; kısa bekle, duraklamışsa sürdür.
+  await new Promise((r) => setTimeout(r, 80));
+  window.speechSynthesis.resume();
+  return new Promise<boolean>((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "tr-TR";
     const v = turkishVoice();

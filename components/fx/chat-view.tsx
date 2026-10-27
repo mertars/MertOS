@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowUp, BookmarkPlus, CheckCircle2, ListPlus, RotateCcw } from "lucide-react";
+import { ArrowUp, BookmarkPlus, CheckCircle2, ListPlus, RotateCcw, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Faz 3 sohbet görünümü. Asistan mesajları balonsuz, rahat okunan metin
@@ -39,11 +39,14 @@ export function ChatList({
   typing,
   compact,
   onUndo,
+  onSpeak,
 }: {
   items: ChatItem[];
   typing?: boolean;
   compact?: boolean;
   onUndo?: (item: Extract<ChatItem, { kind: "islem" }>) => void;
+  /** Asistan mesajını sesli okut (yazarak sorulan cevaplar kendiliğinden okunmaz) */
+  onSpeak?: (text: string) => void;
 }) {
   return (
     <div className={cn("flex flex-col", compact ? "gap-3" : "gap-3.5")}>
@@ -73,6 +76,11 @@ export function ChatList({
                 >
                   {m.text}
                 </p>
+                {onSpeak && !m.warn && (
+                  <button type="button" onClick={() => onSpeak(m.text)} aria-label="Sesli oku" className="-ml-2 mt-0.5 grid h-8 w-8 place-items-center text-[var(--fx-text-3)] active:text-[var(--fx-text)]">
+                    <Volume2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           );

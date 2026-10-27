@@ -42,7 +42,7 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
   // Mikrofonla söylenen: "ses" kipinde (kısa cevap) gönderilir, cevap sesli okunur.
   const dictation = useDictation(async (text) => {
     const reply = await chat.send(text, "ses");
-    if (reply && settings.sesliOkuma) void speak(reply.content, settings.ses);
+    if (reply && settings.sesliOkuma) void speak(reply.content, settings.ses).then((via) => via === "yok" && push({ title: "Cevap okunamadı", description: "Ses çalınamadı; Ayarlar > Ses'ten “Gemini”yi deneyin.", variant: "danger" }));
   });
   useProactiveMessages(chat.receive);
 
@@ -54,6 +54,14 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
     const text = input;
     setInput("");
     if (!(await chat.send(text))) setInput(text);
+  }
+
+  /** Mesajın yanındaki hoparlör: dokunuşla okutur (ses kilidini de açar); okunamazsa nedenini söyler. */
+  async function readAloud(text: string) {
+    unlockVoice();
+    const via = await speak(text, settings.ses);
+    if (via === "yok") push({ title: "Ses çalınamadı", description: "Tarayıcının Türkçe sesi yok ya da ses engelli. Ayarlar > Ses'ten “Gemini”yi seçin.", variant: "danger" });
+    else if (settings.ses === "gemini" && via === "tarayici") push({ title: "Gemini sesi alınamadı", description: "Tarayıcı sesiyle okundu.", variant: "danger" });
   }
 
   function toggleMic() {
@@ -105,7 +113,7 @@ export function AssistantPanel({ layout }: { layout: "phone" | "desktop" }) {
           </p>
         </div>
       ) : (
-        <ChatList items={chat.items} typing={chat.sending} compact={desktop} onUndo={chat.undo} />
+        <ChatList items={chat.items} typing={chat.sending} compact={desktop} onUndo={chat.undo} onSpeak={readAloud} />
       )}
     </ChatScroll>
   );
